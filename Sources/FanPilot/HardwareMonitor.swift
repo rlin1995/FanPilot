@@ -29,6 +29,7 @@ final class SMCBackedHardwareMonitor: HardwareMonitoring {
     private let fallback = SimulatedHardwareMonitor()
     private let probe = SMCProbeRunner()
     private var realHardwareEnabled = false
+    private var lastGoodSnapshot: HardwareSnapshot?
 
     func readSnapshot() -> HardwareSnapshot {
         guard realHardwareEnabled else {
@@ -41,17 +42,30 @@ final class SMCBackedHardwareMonitor: HardwareMonitoring {
             let sensors = snapshot.sensors
             let fans = snapshot.fans
             guard !sensors.isEmpty || !fans.isEmpty else {
+                if var lastGoodSnapshot {
+                    lastGoodSnapshot.controlStatusText = "AppleSMC 恢复中，显示上次数据"
+                    return lastGoodSnapshot
+                }
                 return fallbackSnapshot(reason: "AppleSMC 未返回可识别传感器")
             }
-            return HardwareSnapshot(
+            let resolvedSnapshot = HardwareSnapshot(
                 modelIdentifier: snapshot.modelIdentifier,
-                sensors: sensors.isEmpty ? fallback.readSnapshot().sensors : sensors,
-                fans: fans.isEmpty ? fallback.readSnapshot().fans : fans,
+                sensors: sensors.isEmpty ? (lastGoodSnapshot?.sensors ?? fallback.readSnapshot().sensors) : sensors,
+                fans: fans.isEmpty ? (lastGoodSnapshot?.fans ?? fallback.readSnapshot().fans) : fans,
                 controlAvailable: true,
-                controlStatusText: "AppleSMC 监控"
+                controlStatusText: sensors.isEmpty || fans.isEmpty ? "AppleSMC 恢复中，显示部分上次数据" : "AppleSMC 监控"
             )
+            if !sensors.isEmpty || !fans.isEmpty {
+                lastGoodSnapshot = resolvedSnapshot
+            }
+            return resolvedSnapshot
         } catch {
             realHardwareEnabled = false
+            if var lastGoodSnapshot {
+                lastGoodSnapshot.controlAvailable = false
+                lastGoodSnapshot.controlStatusText = "AppleSMC 暂时不可用，显示上次数据"
+                return lastGoodSnapshot
+            }
             return fallbackSnapshot(reason: error.localizedDescription)
         }
     }

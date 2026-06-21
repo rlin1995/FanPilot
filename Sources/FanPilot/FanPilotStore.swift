@@ -74,6 +74,17 @@ final class FanPilotStore: ObservableObject {
         timer = nil
     }
 
+    func handleSystemWake() {
+        detectExistingHelper()
+        lastWrite = "系统唤醒，正在重新读取 AppleSMC"
+        refresh(evaluate: false)
+        for delay in [1.0, 3.0, 6.0] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                self?.refresh(evaluate: false)
+            }
+        }
+    }
+
     func refresh(evaluate: Bool = true) {
         let snapshot = monitor.readSnapshot()
         modelIdentifier = snapshot.modelIdentifier
@@ -124,6 +135,8 @@ final class FanPilotStore: ObservableObject {
         guard monitor.detectInstalledHelper() else { return }
         helperStatus = "授权 helper 已安装"
         smcStatus = "AppleSMC 检测中"
+        isControlEnabled = true
+        isWriteRestricted = false
         lastWrite = "已检测到本地授权 helper"
     }
 
@@ -155,7 +168,7 @@ final class FanPilotStore: ObservableObject {
             ]
         case .manualFull:
             manualMode = .full
-            currentStrategyMode = .full
+            apply(mode: .full)
         case .custom:
             strategy.name = "自定义"
         }
@@ -165,7 +178,6 @@ final class FanPilotStore: ObservableObject {
 
     func setManualMode(_ mode: CoolingMode) {
         manualMode = mode
-        currentStrategyMode = mode
         if mode == .automatic {
             restoreAutomaticControl()
         } else {
@@ -183,6 +195,7 @@ final class FanPilotStore: ObservableObject {
             refresh(evaluate: false)
             currentStrategyMode = .automatic
             lastWrite = "授权 helper 已安装；可通过菜单栏或下方档位控制风扇"
+            evaluateStrategy(force: true)
         } catch {
             isControlEnabled = false
             helperStatus = error.localizedDescription.contains("AppleSMC") ? "helper 已尝试安装" : "未启用"
@@ -332,6 +345,7 @@ final class FanPilotStore: ObservableObject {
         isControlEnabled = false
         isWriteRestricted = false
         lastWrite = "已恢复 Apple 自动控制"
+        save()
         refresh(evaluate: false)
     }
 
@@ -372,7 +386,6 @@ final class FanPilotStore: ObservableObject {
         }
         let canChange = force || Date().timeIntervalSince(lastModeChange) >= Double(strategy.minimumHoldSeconds)
         if canChange, nextMode != currentStrategyMode {
-            currentStrategyMode = nextMode
             lastModeChange = Date()
             apply(mode: nextMode)
         }
@@ -380,13 +393,23 @@ final class FanPilotStore: ObservableObject {
 
     private func apply(mode: CoolingMode) {
         guard isControlEnabled else {
-            lastWrite = "监控模式：未写入 SMC"
+            lastWrite = "监控模式：策略建议 \(mode.title)，未写入 SMC"
             return
         }
         do {
+            if mode == .automatic {
+                try monitor.restoreAutomatic()
+                currentStrategyMode = .automatic
+                lastWrite = "策略回到自动，已交还 Apple 控制"
+                isWriteRestricted = false
+                smcStatus = "AppleSMC 可访问"
+                return
+            }
             try monitor.apply(mode: mode, to: fans)
+            currentStrategyMode = mode
             lastWrite = "已写入 \(mode.title)"
             isWriteRestricted = false
+            smcStatus = "AppleSMC 可访问"
         } catch {
             lastWrite = "SMC 写入不可用：\(error.localizedDescription)"
             isControlEnabled = false
@@ -424,8 +447,7 @@ final class FanPilotStore: ObservableObject {
            let preset = Preset(rawValue: raw) {
             selectedPreset = preset
         }
-        isControlEnabled = false
-        UserDefaults.standard.set(false, forKey: "FanPilot.controlEnabled")
+        isControlEnabled = UserDefaults.standard.bool(forKey: "FanPilot.controlEnabled")
     }
 }
 

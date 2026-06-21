@@ -45,13 +45,8 @@ final class StatusBarController {
     private func updateTitle() {
         let temp = Int((store.controlSensor?.temperature ?? store.hottestTemperature).rounded())
         let rpm = store.highestFanRPM
-        guard temp > 0, rpm > 0 else {
-            contentView.temperatureText = "--°C"
-            contentView.rpmText = "--rpm"
-            return
-        }
-        contentView.temperatureText = "\(temp)°C"
-        contentView.rpmText = "\(rpm)rpm"
+        contentView.temperatureText = temp > 0 ? "\(temp)°C" : "--°C"
+        contentView.rpmText = rpm >= 0 && !store.fans.isEmpty ? "\(rpm)rpm" : "--rpm"
     }
 
     private func buildMenu() -> NSMenu {

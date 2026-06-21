@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         applyApplicationIcon()
+        observeSystemWake()
 
         let controller = MainWindowController(store: store)
         windowController = controller
@@ -30,5 +31,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         NSApplication.shared.applicationIconImage = icon
+    }
+
+    private func observeSystemWake() {
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(systemDidWake),
+            name: NSWorkspace.didWakeNotification,
+            object: nil
+        )
+    }
+
+    @objc private func systemDidWake() {
+        store.handleSystemWake()
     }
 }
