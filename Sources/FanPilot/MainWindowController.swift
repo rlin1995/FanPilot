@@ -37,7 +37,7 @@ struct FanPilotRootView: View {
         NavigationSplitView {
             List(selection: $store.selectedTab) {
                 ForEach(AppTab.allCases) { tab in
-                    Label(tab.title, systemImage: tab.symbol)
+                    Label(store.text(tab.localizationKey), systemImage: tab.symbol)
                         .tag(tab)
                 }
             }
@@ -76,20 +76,20 @@ struct FanPilotRootView: View {
                     .foregroundStyle(.tertiary)
             }
             Spacer()
-            Picker("当前预设", selection: Binding(
+            Picker(store.text("currentPreset"), selection: Binding(
                 get: { store.selectedPreset },
                 set: { store.setPreset($0) }
             )) {
                 ForEach(Preset.allCases) { preset in
-                    Text(preset.title).tag(preset)
+                    Text(store.title(for: preset)).tag(preset)
                 }
             }
             .frame(width: 150)
-            StatusPill(text: store.isControlEnabled ? "控制中" : "监控中", color: store.isControlEnabled ? .green : .blue)
+            StatusPill(text: store.isControlEnabled ? store.text("controlling") : store.text("monitoring"), color: store.isControlEnabled ? .green : .blue)
             Button {
                 store.restoreAutomaticControl()
             } label: {
-                Label("恢复自动", systemImage: "arrow.counterclockwise")
+                Label(store.text("restoreAuto"), systemImage: "arrow.counterclockwise")
             }
             .buttonStyle(.bordered)
         }

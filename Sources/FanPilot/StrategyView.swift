@@ -6,16 +6,16 @@ struct StrategyView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                SectionHeader(title: "策略", subtitle: "根据一个主控传感器自动切换散热档位")
+                SectionHeader(title: store.text("strategy"), subtitle: store.text("strategySubtitle"))
 
                 HStack(spacing: 16) {
-                    LabeledContent("策略名称") {
-                        TextField("策略名称", text: $store.strategy.name)
+                    LabeledContent(store.text("strategyName")) {
+                        TextField(store.text("strategyName"), text: $store.strategy.name)
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 220)
                     }
 
-                    LabeledContent("主控传感器") {
+                    LabeledContent(store.text("controlSensor")) {
                         Picker("", selection: $store.strategy.controlSensorID) {
                             ForEach(store.sensors) { sensor in
                                 Text(sensor.name).tag(sensor.id)
@@ -27,13 +27,13 @@ struct StrategyView: View {
 
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
-                        Text("温度规则")
+                        Text(store.text("temperatureRules"))
                             .font(.headline)
                         Spacer()
                         Button {
                             store.addRule()
                         } label: {
-                            Label("新增规则", systemImage: "plus")
+                            Label(store.text("addRule"), systemImage: "plus")
                         }
                     }
 
@@ -41,14 +41,14 @@ struct StrategyView: View {
                         HStack(spacing: 12) {
                             Text("≥")
                                 .foregroundStyle(.secondary)
-                            TextField("温度", value: $rule.threshold, formatter: NumberFormatter.temperature)
+                            TextField(store.text("temperature"), value: $rule.threshold, formatter: NumberFormatter.temperature)
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 70)
                             Text("°C")
                                 .foregroundStyle(.secondary)
-                            Picker("档位", selection: $rule.mode) {
+                            Picker(store.text("mode"), selection: $rule.mode) {
                                 ForEach(CoolingMode.allCases.filter { $0 != .automatic }) { mode in
-                                    Text(mode.title).tag(mode)
+                                    Text(store.title(for: mode)).tag(mode)
                                 }
                             }
                             .frame(width: 130)
@@ -59,7 +59,7 @@ struct StrategyView: View {
                                 Image(systemName: "trash")
                             }
                             .buttonStyle(.borderless)
-                            .help("删除规则")
+                            .help(store.text("deleteRule"))
                         }
                         .padding(12)
                         .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
@@ -67,50 +67,50 @@ struct StrategyView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("高级设置")
+                    Text(store.text("advanced"))
                         .font(.headline)
                     Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 12) {
                         GridRow {
-                            Text("回落温差")
+                            Text(store.text("hysteresis"))
                             Stepper(value: $store.strategy.hysteresis, in: 1...15, step: 1) {
                                 Text("\(Int(store.strategy.hysteresis))°C")
                                     .monospacedDigit()
                             }
                         }
                         GridRow {
-                            Text("最短保持时间")
+                            Text(store.text("minimumHold"))
                             Stepper(value: $store.strategy.minimumHoldSeconds, in: 5...180, step: 5) {
-                                Text("\(store.strategy.minimumHoldSeconds) 秒")
+                                Text("\(store.strategy.minimumHoldSeconds) \(store.text("seconds"))")
                                     .monospacedDigit()
                             }
                         }
                         GridRow {
-                            Text("采样间隔")
+                            Text(store.text("samplingInterval"))
                             Stepper(value: $store.strategy.samplingIntervalSeconds, in: 1...10, step: 1) {
-                                Text("\(Int(store.strategy.samplingIntervalSeconds)) 秒")
+                                Text("\(Int(store.strategy.samplingIntervalSeconds)) \(store.text("seconds"))")
                                     .monospacedDigit()
                             }
                         }
                         GridRow {
-                            Text("紧急全速温度")
+                            Text(store.text("emergencyFull"))
                             Stepper(value: $store.strategy.emergencyFullSpeedTemperature, in: 85...105, step: 1) {
                                 Text("\(Int(store.strategy.emergencyFullSpeedTemperature))°C")
                                     .monospacedDigit()
                             }
                         }
                     }
-                    Toggle("退出应用时恢复 Apple 自动控制", isOn: $store.strategy.restoreAutomaticOnQuit)
-                    Toggle("睡眠唤醒后恢复自动并重新评估策略", isOn: $store.strategy.restoreAutomaticAfterWake)
+                    Toggle(store.text("restoreOnQuit"), isOn: $store.strategy.restoreAutomaticOnQuit)
+                    Toggle(store.text("restoreAfterWake"), isOn: $store.strategy.restoreAutomaticAfterWake)
                 }
                 .padding(16)
                 .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
 
                 HStack {
-                    Button("恢复日常办公默认值") {
+                    Button(store.text("restoreDailyDefaults")) {
                         store.setPreset(.daily)
                     }
                     Spacer()
-                    Button("保存策略") {
+                    Button(store.text("saveStrategy")) {
                         store.setPreset(.custom)
                     }
                     .buttonStyle(.borderedProminent)

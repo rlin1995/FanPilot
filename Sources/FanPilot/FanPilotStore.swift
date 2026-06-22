@@ -17,6 +17,7 @@ final class FanPilotStore: ObservableObject {
     @Published var currentStrategyMode: CoolingMode = .automatic
     @Published var hardwareStatusText = "启动中"
     @Published var isWriteRestricted = false
+    @Published var language: AppLanguage = .simplifiedChinese
 
     private let monitor: HardwareMonitoring
     private var timer: Timer?
@@ -47,6 +48,31 @@ final class FanPilotStore: ObservableObject {
 
     var canControlFans: Bool {
         smcStatus.contains("AppleSMC 可访问") || hardwareStatusText.contains("AppleSMC 监控")
+    }
+
+    var localizer: Localizer {
+        Localizer(language: language)
+    }
+
+    func text(_ key: String) -> String {
+        localizer.text(key)
+    }
+
+    func title(for mode: CoolingMode) -> String {
+        localizer.text(mode.localizationKey)
+    }
+
+    func title(for preset: Preset) -> String {
+        localizer.text(preset.localizationKey)
+    }
+
+    func title(for category: SensorCategory) -> String {
+        localizer.text(category.localizationKey)
+    }
+
+    func setLanguage(_ language: AppLanguage) {
+        self.language = language
+        UserDefaults.standard.set(language.rawValue, forKey: "FanPilot.language")
     }
 
     func targetRPMText(for mode: CoolingMode) -> String {
@@ -447,6 +473,10 @@ final class FanPilotStore: ObservableObject {
            let preset = Preset(rawValue: raw) {
             selectedPreset = preset
         }
+        if let raw = UserDefaults.standard.string(forKey: "FanPilot.language"),
+           let savedLanguage = AppLanguage(rawValue: raw) {
+            language = savedLanguage
+        }
         isControlEnabled = UserDefaults.standard.bool(forKey: "FanPilot.controlEnabled")
     }
 }
@@ -458,6 +488,15 @@ enum AppTab: String, CaseIterable, Identifiable {
     case safety
 
     var id: String { rawValue }
+
+    var localizationKey: String {
+        switch self {
+        case .overview: "overview"
+        case .sensors: "sensors"
+        case .strategy: "strategy"
+        case .safety: "safety"
+        }
+    }
 
     var title: String {
         switch self {

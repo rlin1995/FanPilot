@@ -17,29 +17,29 @@ struct SensorsView: View {
         HStack(spacing: 0) {
             List(selection: $selectedCategory) {
                 ForEach(SensorCategory.allCases) { category in
-                    Text(category.title).tag(category)
+                    Text(store.title(for: category)).tag(category)
                 }
             }
             .frame(width: 160)
             Divider()
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
-                    SectionHeader(title: "传感器", subtitle: "选择一个传感器作为策略主控")
+                    SectionHeader(title: store.text("sensors"), subtitle: store.text("sensorSubtitle"))
                     Spacer()
-                    TextField("搜索", text: $searchText)
+                    TextField(store.text("search"), text: $searchText)
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 220)
                 }
 
                 Table(filteredSensors) {
-                    TableColumn("传感器") { sensor in
+                    TableColumn(store.text("sensorColumn")) { sensor in
                         HStack {
                             Image(systemName: icon(for: sensor.category))
                                 .foregroundStyle(.secondary)
                                 .frame(width: 18)
                             Text(sensor.name)
                             if sensor.id == store.strategy.controlSensorID {
-                                Text("主控")
+                                Text(store.text("primary"))
                                     .font(.caption)
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
@@ -47,12 +47,12 @@ struct SensorsView: View {
                             }
                         }
                     }
-                    TableColumn("温度") { sensor in
+                    TableColumn(store.text("temperature")) { sensor in
                         Text(sensor.temperature.temperatureText)
                             .monospacedDigit()
                             .foregroundStyle(temperatureColor(sensor.temperature))
                     }
-                    TableColumn("用途") { sensor in
+                    TableColumn(store.text("usage")) { sensor in
                         HStack {
                             Button {
                                 store.selectControlSensor(sensor)

@@ -35,6 +35,14 @@ final class StatusBarController {
                 self?.statusItem.menu = self?.buildMenu()
             }
             .store(in: &cancellables)
+
+        store.$language
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.updateTitle()
+                self?.statusItem.menu = self?.buildMenu()
+            }
+            .store(in: &cancellables)
     }
 
     @objc private func showMenu() {
@@ -59,11 +67,11 @@ final class StatusBarController {
             menu.addItem(headerItem("\(fan.name)    \(fan.currentRPM) rpm"))
         }
         menu.addItem(.separator())
-        menu.addItem(headerItem("当前预设    \(store.selectedPreset.title)"))
+        menu.addItem(headerItem("\(store.text("currentPresetMenu"))    \(store.title(for: store.selectedPreset))"))
         menu.addItem(.separator())
 
         for mode in CoolingMode.allCases {
-            let item = ClosureMenuItem(title: mode.title) { [weak self] in
+            let item = ClosureMenuItem(title: store.title(for: mode)) { [weak self] in
                 self?.store.applyMode(mode)
             }
             item.state = store.currentStrategyMode == mode ? .on : .off
@@ -71,14 +79,27 @@ final class StatusBarController {
         }
 
         menu.addItem(.separator())
-        menu.addItem(ClosureMenuItem(title: "打开 FanPilot") { [weak self] in
+        let languageItem = NSMenuItem(title: store.text("language"), action: nil, keyEquivalent: "")
+        let languageMenu = NSMenu()
+        for language in AppLanguage.allCases {
+            let item = ClosureMenuItem(title: language.nativeTitle) { [weak self] in
+                self?.store.setLanguage(language)
+                self?.statusItem.menu = self?.buildMenu()
+            }
+            item.state = store.language == language ? .on : .off
+            languageMenu.addItem(item)
+        }
+        languageItem.submenu = languageMenu
+        menu.addItem(languageItem)
+        menu.addItem(.separator())
+        menu.addItem(ClosureMenuItem(title: store.text("openFanPilot")) { [weak self] in
             self?.windowController?.show()
         })
-        menu.addItem(ClosureMenuItem(title: "恢复 Apple 自动控制") { [weak self] in
+        menu.addItem(ClosureMenuItem(title: store.text("restoreAppleAuto")) { [weak self] in
             self?.store.restoreAutomaticControl()
         })
         menu.addItem(.separator())
-        menu.addItem(ClosureMenuItem(title: "退出") {
+        menu.addItem(ClosureMenuItem(title: store.text("quit")) {
             NSApplication.shared.terminate(nil)
         })
         return menu

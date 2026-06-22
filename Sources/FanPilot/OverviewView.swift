@@ -7,18 +7,18 @@ struct OverviewView: View {
         VStack(spacing: 0) {
             HStack(alignment: .top, spacing: 18) {
                 VStack(alignment: .leading, spacing: 14) {
-                    SectionHeader(title: "风扇", subtitle: "最低 / 当前 / 最大 RPM")
+                    SectionHeader(title: store.text("fans"), subtitle: store.text("fanRPMSubtitle"))
                     ForEach(store.fans) { fan in
-                        FanRow(fan: fan)
+                        FanRow(store: store, fan: fan)
                     }
                     Spacer(minLength: 0)
                 }
                 .frame(maxWidth: .infinity, alignment: .topLeading)
 
                 VStack(alignment: .leading, spacing: 14) {
-                    SectionHeader(title: "关键温度", subtitle: store.hardwareStatusText)
+                    SectionHeader(title: store.text("temperature"), subtitle: store.hardwareStatusText)
                     if let sensor = store.controlSensor {
-                        ControlSensorCard(sensor: sensor)
+                        ControlSensorCard(store: store, sensor: sensor)
                     }
                     ForEach(store.sensors.filter(\.isFavorite).prefix(6)) { sensor in
                         SensorCompactRow(sensor: sensor)
@@ -45,6 +45,7 @@ struct OverviewView: View {
 }
 
 struct FanRow: View {
+    @ObservedObject var store: FanPilotStore
     var fan: FanReading
 
     private var progress: Double {
@@ -67,7 +68,7 @@ struct FanRow: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Text(fan.mode.title)
+                Text(store.title(for: fan.mode))
                     .font(.callout.weight(.medium))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
@@ -82,12 +83,13 @@ struct FanRow: View {
 }
 
 struct ControlSensorCard: View {
+    @ObservedObject var store: FanPilotStore
     var sensor: TemperatureSensor
 
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 3) {
-                Text("主控传感器")
+                Text(store.text("controlSensor"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Text(sensor.name)

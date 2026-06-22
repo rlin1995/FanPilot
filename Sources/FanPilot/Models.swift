@@ -11,6 +11,17 @@ enum CoolingMode: String, CaseIterable, Identifiable, Codable {
 
     var id: String { rawValue }
 
+    var localizationKey: String {
+        switch self {
+        case .automatic: "automatic"
+        case .quiet: "quiet"
+        case .low: "low"
+        case .medium: "medium"
+        case .high: "high"
+        case .full: "full"
+        }
+    }
+
     var title: String {
         switch self {
         case .automatic: "自动"
@@ -54,6 +65,16 @@ enum Preset: String, CaseIterable, Identifiable, Codable {
 
     var id: String { rawValue }
 
+    var localizationKey: String {
+        switch self {
+        case .daily: "daily"
+        case .externalDisplay: "externalDisplay"
+        case .heavyLoad: "heavyLoad"
+        case .manualFull: "manualFull"
+        case .custom: "custom"
+        }
+    }
+
     var title: String {
         switch self {
         case .daily: "日常办公"
@@ -75,6 +96,18 @@ enum SensorCategory: String, CaseIterable, Identifiable, Codable {
     case other
 
     var id: String { rawValue }
+
+    var localizationKey: String {
+        switch self {
+        case .all: "all"
+        case .cpu: "cpu"
+        case .battery: "battery"
+        case .enclosure: "enclosure"
+        case .wireless: "wireless"
+        case .storage: "storage"
+        case .other: "other"
+        }
+    }
 
     var title: String {
         switch self {

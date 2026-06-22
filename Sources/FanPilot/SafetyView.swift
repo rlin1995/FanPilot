@@ -27,7 +27,7 @@ struct SafetyView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                SectionHeader(title: "安全与权限", subtitle: "控制风扇需要本地 helper 与管理员授权")
+                SectionHeader(title: store.text("safety"), subtitle: store.text("safetySubtitle"))
 
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(alignment: .top, spacing: 14) {
@@ -50,17 +50,17 @@ struct SafetyView: View {
 
                     HStack(spacing: 10) {
                         if store.isControlEnabled {
-                            fittedButton("恢复 Apple 自动控制") {
+                            fittedButton(store.text("restoreAppleAuto")) {
                                 store.restoreAutomaticControl()
                             }
                             fittedButton("卸载 helper") {
                                 store.uninstallHelper()
                             }
                         } else {
-                            fittedButton("检测 AppleSMC") {
+                            fittedButton(store.text("detectAppleSMC")) {
                                 store.detectSMC()
                             }
-                            fittedButton("安装/更新授权 helper") {
+                            fittedButton(store.text("installUpdateHelper")) {
                                 store.enableControl()
                             }
                             .buttonStyle(.borderedProminent)
@@ -68,22 +68,22 @@ struct SafetyView: View {
                     }
 
                     HStack(spacing: 10) {
-                        fittedButton("运行诊断") {
+                        fittedButton(store.text("runDiagnostics")) {
                             store.runDiagnostics()
                         }
-                        fittedButton("扫描风扇 Key") {
+                        fittedButton(store.text("scanFanKeys")) {
                             store.runFanKeyDiagnostics()
                         }
-                        fittedButton("测试目标转速") {
+                        fittedButton(store.text("testTargetRPM")) {
                             store.testTargetWrite()
                         }
-                        fittedButton("测试模式 Key") {
+                        fittedButton(store.text("testModeKey")) {
                             store.testModeKeyWrite()
                         }
-                        fittedButton("测试最低转速") {
+                        fittedButton(store.text("testMinimumRPM")) {
                             store.testMinimumWrite()
                         }
-                        fittedButton("测试强制控制") {
+                        fittedButton(store.text("testForceControl")) {
                             store.testForceWrite()
                         }
                     }
@@ -94,18 +94,18 @@ struct SafetyView: View {
 
                 if store.canControlFans {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("散热档位")
+                        Text(store.text("coolingModes"))
                             .font(.headline)
                         ForEach(CoolingMode.allCases) { mode in
                             HStack(spacing: 12) {
                                 if mode == store.currentStrategyMode {
-                                    Button(mode.title) {
+                                    Button(store.title(for: mode)) {
                                         store.applyMode(mode)
                                     }
                                     .buttonStyle(.borderedProminent)
                                     .frame(width: 84, alignment: .leading)
                                 } else {
-                                    Button(mode.title) {
+                                    Button(store.title(for: mode)) {
                                         store.applyMode(mode)
                                     }
                                     .buttonStyle(.bordered)
@@ -123,12 +123,12 @@ struct SafetyView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("状态")
+                    Text(store.text("status"))
                         .font(.headline)
-                    InfoRow(label: "Helper 状态", value: store.helperStatus)
-                    InfoRow(label: "SMC 访问", value: store.smcStatus)
-                    InfoRow(label: "最后写入", value: store.lastWrite)
-                    InfoRow(label: "硬件模式", value: store.hardwareStatusText)
+                    InfoRow(label: store.text("helperStatus"), value: store.helperStatus)
+                    InfoRow(label: store.text("smcAccess"), value: store.smcStatus)
+                    InfoRow(label: store.text("lastWrite"), value: store.lastWrite)
+                    InfoRow(label: store.text("hardwareMode"), value: store.hardwareStatusText)
                 }
                 .padding(18)
                 .frame(maxWidth: 760, alignment: .leading)
