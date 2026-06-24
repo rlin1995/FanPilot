@@ -18,6 +18,9 @@ final class FanPilotStore: ObservableObject {
     @Published var hardwareStatusText = "启动中"
     @Published var isWriteRestricted = false
     @Published var language: AppLanguage = .simplifiedChinese
+    @Published var helperState: HelperInstallState = .missing
+    @Published var smcAccessState: SMCAccessState = .monitorOnly
+    @Published var controlPermissionState: ControlPermissionState = .monitorOnly
 
     private let monitor: HardwareMonitoring
     private var timer: Timer?
@@ -43,11 +46,11 @@ final class FanPilotStore: ObservableObject {
 
     var activeRuleText: String {
         guard let sensor = controlSensor else { return "等待传感器数据" }
-        return "策略：\(sensor.name) \(sensor.temperature.temperatureText) -> \(currentStrategyMode.title)"
+        return "策略：\(sensor.name) \(sensor.temperature.temperatureText) -> \(title(for: currentStrategyMode))"
     }
 
     var canControlFans: Bool {
-        smcStatus.contains("AppleSMC 可访问") || hardwareStatusText.contains("AppleSMC 监控")
+        smcAccessState == .available || smcAccessState == .recovering
     }
 
     var localizer: Localizer {
@@ -75,6 +78,12 @@ final class FanPilotStore: ObservableObject {
         UserDefaults.standard.set(language.rawValue, forKey: "FanPilot.language")
     }
 
+    func updateSamplingInterval(_ interval: Double) {
+        strategy.samplingIntervalSeconds = interval
+        save()
+        restartTimer()
+    }
+
     func targetRPMText(for mode: CoolingMode) -> String {
         guard mode != .automatic, !fans.isEmpty else {
             return mode.detail
@@ -90,9 +99,7 @@ final class FanPilotStore: ObservableObject {
     func start() {
         detectExistingHelper()
         refresh()
-        timer = Timer.scheduledTimer(withTimeInterval: strategy.samplingIntervalSeconds, repeats: true) { [weak self] _ in
-            self?.refresh()
-        }
+        restartTimer()
     }
 
     func stop() {
@@ -100,13 +107,27 @@ final class FanPilotStore: ObservableObject {
         timer = nil
     }
 
+    func prepareForTermination() {
+        if strategy.restoreAutomaticOnQuit {
+            restoreAutomaticControl()
+        } else {
+            save()
+        }
+        stop()
+    }
+
     func handleSystemWake() {
         detectExistingHelper()
         lastWrite = "系统唤醒，正在重新读取 AppleSMC"
+        if strategy.restoreAutomaticAfterWake {
+            try? monitor.restoreAutomatic()
+            currentStrategyMode = .automatic
+            lastModeChange = .distantPast
+        }
         refresh(evaluate: false)
         for delay in [1.0, 3.0, 6.0] {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                self?.refresh(evaluate: false)
+                self?.refresh(evaluate: delay == 6.0)
             }
         }
     }
@@ -115,14 +136,18 @@ final class FanPilotStore: ObservableObject {
         let snapshot = monitor.readSnapshot()
         modelIdentifier = snapshot.modelIdentifier
         hardwareStatusText = snapshot.controlStatusText
+        smcAccessState = snapshot.controlAvailable ? .available : .unavailable
         smcStatus = snapshot.controlAvailable ? "AppleSMC 可访问" : "只读/模拟监控"
         if isControlEnabled, !snapshot.controlAvailable {
             isControlEnabled = false
             helperStatus = "需要授权 helper"
+            controlPermissionState = .monitorOnly
             lastWrite = "AppleSMC 不可用，已退出控制模式"
         }
         if snapshot.controlAvailable {
             helperStatus = helperStatus.contains("授权") ? helperStatus : "SMC 探测可用"
+            helperState = helperStatus.contains("授权") ? .installed : .bundled
+            controlPermissionState = isControlEnabled ? .active : .ready
         }
         sensors = mergeUserSensorState(snapshot.sensors)
         fans = snapshot.fans.map { fan in
@@ -140,6 +165,7 @@ final class FanPilotStore: ObservableObject {
         let snapshot = monitor.readSnapshot()
         modelIdentifier = snapshot.modelIdentifier
         hardwareStatusText = snapshot.controlStatusText
+        smcAccessState = snapshot.controlAvailable ? .available : .unavailable
         smcStatus = snapshot.controlAvailable ? "AppleSMC 可访问" : "AppleSMC 不可访问"
         sensors = mergeUserSensorState(snapshot.sensors)
         fans = snapshot.fans.map { fan in
@@ -149,19 +175,33 @@ final class FanPilotStore: ObservableObject {
         }
         if snapshot.controlAvailable {
             helperStatus = "SMC 探测可用"
+            helperState = .bundled
+            controlPermissionState = isControlEnabled ? .active : .ready
             lastWrite = "AppleSMC 检测成功"
         } else {
             monitor.disableRealHardware()
             isControlEnabled = false
+            controlPermissionState = .monitorOnly
             lastWrite = "AppleSMC 检测失败"
         }
     }
 
     func detectExistingHelper() {
-        guard monitor.detectInstalledHelper() else { return }
+        guard monitor.detectInstalledHelper() else {
+            if monitor.hasInstalledHelper() {
+                helperState = .attempted
+                helperStatus = "已安装旧版 helper，需更新"
+                smcAccessState = .unavailable
+                controlPermissionState = .monitorOnly
+                lastWrite = "检测到旧版 helper，请安装/更新授权 helper"
+            }
+            return
+        }
         helperStatus = "授权 helper 已安装"
         smcStatus = "AppleSMC 检测中"
-        isControlEnabled = true
+        helperState = .installed
+        smcAccessState = .checking
+        controlPermissionState = isControlEnabled ? .active : .ready
         isWriteRestricted = false
         lastWrite = "已检测到本地授权 helper"
     }
@@ -218,13 +258,19 @@ final class FanPilotStore: ObservableObject {
             smcStatus = "AppleSMC 可访问"
             isControlEnabled = true
             isWriteRestricted = false
+            helperState = .installed
+            smcAccessState = .available
+            controlPermissionState = .active
             refresh(evaluate: false)
             currentStrategyMode = .automatic
             lastWrite = "授权 helper 已安装；可通过菜单栏或下方档位控制风扇"
             evaluateStrategy(force: true)
         } catch {
             isControlEnabled = false
+            helperState = error.localizedDescription.contains("AppleSMC") ? .attempted : .missing
             helperStatus = error.localizedDescription.contains("AppleSMC") ? "helper 已尝试安装" : "未启用"
+            smcAccessState = .unavailable
+            controlPermissionState = .monitorOnly
             smcStatus = error.localizedDescription
             lastWrite = "启用失败：\(error.localizedDescription)"
             monitor.disableRealHardware()
@@ -237,6 +283,8 @@ final class FanPilotStore: ObservableObject {
             diagnosticText = try monitor.diagnose()
             helperStatus = "SMC 探测可用"
             smcStatus = "AppleSMC 可访问"
+            smcAccessState = .available
+            controlPermissionState = isControlEnabled ? .active : .ready
             isWriteRestricted = false
             lastWrite = "SMC 诊断完成"
         } catch {
@@ -250,6 +298,8 @@ final class FanPilotStore: ObservableObject {
             diagnosticText = try monitor.fanKeys()
             helperStatus = "SMC 探测可用"
             smcStatus = "AppleSMC 可访问"
+            smcAccessState = .available
+            controlPermissionState = isControlEnabled ? .active : .ready
             lastWrite = "风扇 key 诊断完成"
         } catch {
             diagnosticText = error.localizedDescription
@@ -266,10 +316,12 @@ final class FanPilotStore: ObservableObject {
             isWriteRestricted = false
             helperStatus = "授权 helper 已安装"
             smcStatus = "AppleSMC 可访问，目标转速写入成功"
+            smcAccessState = .available
             lastWrite = "已测试写入 F0Tg/F1Tg（低速）"
             refresh(evaluate: false)
         } catch {
             isWriteRestricted = true
+            controlPermissionState = .writeRestricted
             smcStatus = "AppleSMC 可访问，目标转速写入失败"
             lastWrite = "目标转速写入失败：\(error.localizedDescription)"
         }
@@ -284,10 +336,12 @@ final class FanPilotStore: ObservableObject {
             isWriteRestricted = false
             helperStatus = "授权 helper 已安装"
             smcStatus = "AppleSMC 可访问，强制控制写入成功"
+            smcAccessState = .available
             lastWrite = "已测试写入 F0Tg/F1Tg + FS!（低速）"
             refresh(evaluate: false)
         } catch {
             isWriteRestricted = true
+            controlPermissionState = .writeRestricted
             smcStatus = "AppleSMC 可访问，强制控制写入失败"
             lastWrite = "强制控制写入失败：\(error.localizedDescription)"
         }
@@ -311,14 +365,18 @@ final class FanPilotStore: ObservableObject {
             isControlEnabled = true
             helperStatus = "授权 helper 已安装"
             smcStatus = "AppleSMC 可访问，模式 key 写入成功"
+            helperState = .installed
+            smcAccessState = .available
+            controlPermissionState = .active
             currentStrategyMode = mode
             manualMode = mode
-            lastWrite = "已切换到\(mode.title)：\(targetRPMText(for: mode))"
+            lastWrite = "已切换到\(title(for: mode))：\(targetRPMText(for: mode))"
             refresh(evaluate: false)
         } catch {
             isWriteRestricted = true
+            controlPermissionState = .writeRestricted
             smcStatus = "AppleSMC 可访问，模式 key 写入失败"
-            lastWrite = "\(mode.title)写入失败：\(error.localizedDescription)"
+            lastWrite = "\(title(for: mode))写入失败：\(error.localizedDescription)"
         }
     }
 
@@ -334,10 +392,12 @@ final class FanPilotStore: ObservableObject {
             isWriteRestricted = false
             helperStatus = "授权 helper 已安装"
             smcStatus = "AppleSMC 可访问，最低转速写入成功"
+            smcAccessState = .available
             lastWrite = "已测试写入 F0Mn/F1Mn（低速最低转速）"
             refresh(evaluate: false)
         } catch {
             isWriteRestricted = true
+            controlPermissionState = .writeRestricted
             smcStatus = "AppleSMC 可访问，最低转速写入失败"
             lastWrite = "最低转速写入失败：\(error.localizedDescription)"
         }
@@ -351,6 +411,9 @@ final class FanPilotStore: ObservableObject {
         }
         isControlEnabled = false
         isWriteRestricted = false
+        helperState = .missing
+        smcAccessState = .monitorOnly
+        controlPermissionState = .monitorOnly
         helperStatus = "未安装"
         smcStatus = "只读监控"
         if !lastWrite.contains("卸载 helper 失败") {
@@ -370,6 +433,7 @@ final class FanPilotStore: ObservableObject {
         try? monitor.restoreAutomatic()
         isControlEnabled = false
         isWriteRestricted = false
+        controlPermissionState = smcAccessState == .available ? .ready : .monitorOnly
         lastWrite = "已恢复 Apple 自动控制"
         save()
         refresh(evaluate: false)
@@ -405,10 +469,7 @@ final class FanPilotStore: ObservableObject {
         if sensor.temperature >= strategy.emergencyFullSpeedTemperature {
             nextMode = .full
         } else {
-            nextMode = strategy.rules
-                .sorted { $0.threshold < $1.threshold }
-                .last { sensor.temperature >= $0.threshold }?
-                .mode ?? .automatic
+            nextMode = modeForTemperature(sensor.temperature)
         }
         let canChange = force || Date().timeIntervalSince(lastModeChange) >= Double(strategy.minimumHoldSeconds)
         if canChange, nextMode != currentStrategyMode {
@@ -417,9 +478,19 @@ final class FanPilotStore: ObservableObject {
         }
     }
 
+    private func modeForTemperature(_ temperature: Double) -> CoolingMode {
+        let sortedRules = strategy.rules.sorted { $0.threshold < $1.threshold }
+        guard currentStrategyMode != .automatic,
+              let currentRule = sortedRules.last(where: { $0.mode == currentStrategyMode }),
+              temperature > currentRule.threshold - strategy.hysteresis else {
+            return sortedRules.last { temperature >= $0.threshold }?.mode ?? .automatic
+        }
+        return currentStrategyMode
+    }
+
     private func apply(mode: CoolingMode) {
         guard isControlEnabled else {
-            lastWrite = "监控模式：策略建议 \(mode.title)，未写入 SMC"
+            lastWrite = "监控模式：策略建议 \(title(for: mode))，未写入 SMC"
             return
         }
         do {
@@ -428,13 +499,15 @@ final class FanPilotStore: ObservableObject {
                 currentStrategyMode = .automatic
                 lastWrite = "策略回到自动，已交还 Apple 控制"
                 isWriteRestricted = false
+                controlPermissionState = .active
                 smcStatus = "AppleSMC 可访问"
                 return
             }
             try monitor.apply(mode: mode, to: fans)
             currentStrategyMode = mode
-            lastWrite = "已写入 \(mode.title)"
+            lastWrite = "已写入 \(title(for: mode))"
             isWriteRestricted = false
+            controlPermissionState = .active
             smcStatus = "AppleSMC 可访问"
         } catch {
             lastWrite = "SMC 写入不可用：\(error.localizedDescription)"
@@ -443,6 +516,13 @@ final class FanPilotStore: ObservableObject {
             helperStatus = "授权 helper 已安装"
             smcStatus = "AppleSMC 可访问，写入受限"
             currentStrategyMode = .automatic
+        }
+    }
+
+    private func restartTimer() {
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: strategy.samplingIntervalSeconds, repeats: true) { [weak self] _ in
+            self?.refresh()
         }
     }
 

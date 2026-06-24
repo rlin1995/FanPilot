@@ -2,26 +2,34 @@ import SwiftUI
 
 struct SafetyView: View {
     @ObservedObject var store: FanPilotStore
+    @State private var showsAdvancedDiagnostics = false
 
     private var needsHelper: Bool {
-        !store.isWriteRestricted && !hasSMCAccess && !store.isControlEnabled && (
-            store.helperStatus.contains("helper") ||
-            store.smcStatus.contains("拒绝") ||
-            store.smcStatus.contains("不可访问") ||
-            store.lastWrite.contains("不可用") ||
-            store.lastWrite.contains("失败")
-        )
+        store.helperState != .installed && store.smcAccessState == .unavailable && !store.isControlEnabled
     }
 
     private var hasSMCAccess: Bool {
-        store.smcStatus.contains("AppleSMC 可访问") ||
-        store.hardwareStatusText.contains("AppleSMC 监控") ||
-        store.lastWrite.contains("AppleSMC 检测成功") ||
-        store.lastWrite.contains("SMC 诊断完成")
+        store.smcAccessState == .available || store.smcAccessState == .recovering
     }
 
     private var writeRestricted: Bool {
-        store.isWriteRestricted || store.smcStatus.contains("写入受限")
+        store.controlPermissionState == .writeRestricted
+    }
+
+    private var statusTitle: String {
+        if store.isControlEnabled { return store.text("controlEnabledTitle") }
+        if writeRestricted { return store.text("writeRestrictedTitle") }
+        if hasSMCAccess { return store.text("smcAvailableTitle") }
+        if needsHelper { return store.text("helperNeededTitle") }
+        return store.text("monitorOnlyTitle")
+    }
+
+    private var statusBody: String {
+        if store.isControlEnabled { return store.text("controlEnabledBody") }
+        if writeRestricted { return store.text("writeRestrictedBody") }
+        if hasSMCAccess { return store.text("smcAvailableBody") }
+        if needsHelper { return store.text("helperNeededBody") }
+        return store.text("monitorOnlyBody")
     }
 
     var body: some View {
@@ -36,15 +44,15 @@ struct SafetyView: View {
                             .foregroundStyle(store.isControlEnabled ? .green : writeRestricted ? .orange : needsHelper ? .orange : .secondary)
                             .frame(width: 44)
                         VStack(alignment: .leading, spacing: 6) {
-                            Text(store.isControlEnabled ? "风扇控制已启用" : writeRestricted ? "AppleSMC 可读，写入受限" : hasSMCAccess ? "AppleSMC 已可访问" : needsHelper ? "需要管理员授权 helper" : "当前为监控模式")
+                            Text(statusTitle)
                                 .font(.title3.weight(.semibold))
-                            Text(store.isControlEnabled ? "FanPilot 正在按策略评估散热档位。" : writeRestricted ? "FanPilot 已经能读取温度和风扇转速，但当前系统拒绝写入风扇控制 key。应用会保持监控模式。" : hasSMCAccess ? "FanPilot 已经能读取 AppleSMC。你可以先在概览页查看真实温度和转速。" : needsHelper ? "macOS 已拒绝普通进程访问 AppleSMC。下一步需要安装本地授权 helper 后再读取和控制风扇。" : "FanPilot 可以读取温度和风扇转速，但尚未控制风扇。")
+                            Text(statusBody)
                                 .foregroundStyle(.secondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
 
-                    Text("启用后，FanPilot 会安装一个本地授权 helper，并通过它访问 AppleSMC。FanPilot 只会提高最低风扇转速，不会低于 Apple 默认最低值；任何读取或写入失败都会自动回到监控模式。")
+                    Text(store.text("safetyNotice"))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
 
@@ -53,7 +61,7 @@ struct SafetyView: View {
                             fittedButton(store.text("restoreAppleAuto")) {
                                 store.restoreAutomaticControl()
                             }
-                            fittedButton("卸载 helper") {
+                            fittedButton(store.text("uninstallHelper")) {
                                 store.uninstallHelper()
                             }
                         } else {
@@ -67,25 +75,37 @@ struct SafetyView: View {
                         }
                     }
 
-                    HStack(spacing: 10) {
-                        fittedButton(store.text("runDiagnostics")) {
-                            store.runDiagnostics()
+                    DisclosureGroup(isExpanded: $showsAdvancedDiagnostics) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(store.text("advancedDiagnosticsSubtitle"))
+                                .foregroundStyle(.secondary)
+                            HStack(spacing: 10) {
+                                fittedButton(store.text("runDiagnostics")) {
+                                    store.runDiagnostics()
+                                }
+                                fittedButton(store.text("scanFanKeys")) {
+                                    store.runFanKeyDiagnostics()
+                                }
+                                fittedButton(store.text("testTargetRPM")) {
+                                    store.testTargetWrite()
+                                }
+                            }
+                            HStack(spacing: 10) {
+                                fittedButton(store.text("testModeKey")) {
+                                    store.testModeKeyWrite()
+                                }
+                                fittedButton(store.text("testMinimumRPM")) {
+                                    store.testMinimumWrite()
+                                }
+                                fittedButton(store.text("testForceControl")) {
+                                    store.testForceWrite()
+                                }
+                            }
                         }
-                        fittedButton(store.text("scanFanKeys")) {
-                            store.runFanKeyDiagnostics()
-                        }
-                        fittedButton(store.text("testTargetRPM")) {
-                            store.testTargetWrite()
-                        }
-                        fittedButton(store.text("testModeKey")) {
-                            store.testModeKeyWrite()
-                        }
-                        fittedButton(store.text("testMinimumRPM")) {
-                            store.testMinimumWrite()
-                        }
-                        fittedButton(store.text("testForceControl")) {
-                            store.testForceWrite()
-                        }
+                        .padding(.top, 6)
+                    } label: {
+                        Text(store.text("advancedDiagnostics"))
+                            .font(.headline)
                     }
                 }
                 .padding(18)
@@ -136,7 +156,7 @@ struct SafetyView: View {
 
                 if !store.diagnosticText.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("SMC 诊断")
+                        Text(store.text("diagnostics"))
                             .font(.headline)
                         ScrollView {
                             Text(store.diagnosticText)

@@ -1,29 +1,75 @@
 # FanPilot
 
-FanPilot is a native macOS menu bar and utility-window prototype for Intel Mac fan monitoring and cooling policy control.
-FanPilot 是一款原生 macOS 菜单栏工具窗口原型程序，用于英特尔芯片 Mac 的风扇状态监控与散热策略管控。
+FanPilot is a native macOS menu bar and utility-window app for Intel Mac fan monitoring and cooling policy control.
 
-# Current build 当前版本功能：
-Shows a complete macOS-style main window. 提供完整 macOS 原生风格主窗口界面。
-Shows a menu bar item with temperature and fan RPM. 菜单栏常驻显示温度与风扇转速（RPM）。
-Supports presets, a single control sensor, cooling rules, favorites, and safety status. 支持预设方案、独立控制传感器、散热规则、收藏配置以及安全状态提示。
-Uses a simulated hardware monitor while the SMC/helper layer is being connected. 在 SMC 底层 / 辅助驱动层对接完成前，采用模拟硬件监控模块运行。
-术语补充说明
-SMC：System Management Controller，系统管理控制器，Mac 负责风扇、温度、电源管理的底层芯片
-RPM：转 / 分钟，风扇转速单位
-menu bar：macOS 屏幕顶部菜单栏
-presets：散热预设档位（静音 / 均衡 / 强散热等）
+FanPilot 是一款面向 Intel Mac 的 macOS 菜单栏散热工具，用于查看 AppleSMC 温度传感器、监控左右风扇转速，并根据主控传感器自动切换散热档位。
 
-Build:
+## Features
+
+- Real AppleSMC temperature sensor and fan RPM monitoring
+- Native-style macOS utility window with light and dark mode support
+- Compact menu bar readout for control-sensor temperature and fan RPM
+- Cooling modes: Auto, Quiet, Low, Medium, High, and Full
+- One selected control sensor for cooling policy evaluation
+- Custom temperature-to-cooling-mode rules
+- Hysteresis and minimum hold time to avoid frequent mode switching
+- Wake recovery handling after macOS sleep
+- Menu bar language selection: Simplified Chinese, Traditional Chinese, and English
+- Local authorized helper for AppleSMC fan-control writes
+
+## Safety Model
+
+FanPilot is designed to raise fan targets for earlier or stronger cooling. It does not lower fan speed below Apple's default minimum values.
+
+When fan control is enabled, FanPilot writes per-fan mode and target keys through AppleSMC. If a read or write fails, the app returns to monitoring mode and keeps Apple automatic control available.
+
+The app separates these states in the UI:
+
+- AppleSMC readable
+- Helper installed
+- Fan control enabled
+- Write restricted
+- Monitoring only
+
+## Helper And Permissions
+
+Fan control requires administrator authorization. FanPilot installs a local helper at:
+
+```text
+/Library/PrivilegedHelperTools/com.local.FanPilot.SMCProbe
+```
+
+Current development builds install and update the helper through an administrator-authorized AppleScript command. The helper includes a protocol version check so older helper copies are not silently reused by newer app builds.
+
+For a production release, this helper should be migrated to a signed SMJobBless or LaunchDaemon/XPC flow.
+
+## Supported Hardware
+
+FanPilot currently targets Intel MacBook models with AppleSMC fan keys. Development and testing have focused on MacBookPro16,2.
+
+Apple Silicon Macs use a different hardware-control model and are not the current target.
+
+## Build
 
 ```sh
 ./scripts/build-app.sh
 ```
 
-Run:
+The app bundle is generated at:
+
+```text
+build/FanPilot.app
+```
+
+## Run
 
 ```sh
 open build/FanPilot.app
 ```
 
-The first hardware-control release should replace `SimulatedHardwareMonitor` with a privileged helper-backed SMC implementation. The app is intentionally written so the UI and policy model do not depend on raw SMC details.
+On first use, open Safety and Permissions, then install or update the authorized helper.
+
+## Notes
+
+This project is still evolving. The UI and policy model are intentionally kept separate from raw SMC details so the helper implementation can be hardened without redesigning the app experience.
+

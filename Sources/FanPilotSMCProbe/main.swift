@@ -11,14 +11,18 @@ func fail(_ message: String, code: Int32 = 2) -> Never {
 }
 
 let command = CommandLine.arguments.dropFirst().first ?? "snapshot"
+let helperProtocolVersion = 2
 
 do {
-    let smc = try AppleSMCClient().open()
     switch command {
+    case "version":
+        writeJSON(ProbeVersion(version: helperProtocolVersion))
     case "probe":
+        let smc = try AppleSMCClient().open()
         try smc.probe()
         writeJSON(ProbeStatus(ok: true))
     case "snapshot":
+        let smc = try AppleSMCClient().open()
         let sensors = smc.readKnownTemperatureSensors()
         let fans = smc.readFans()
         if sensors.isEmpty && fans.isEmpty {
@@ -30,12 +34,15 @@ do {
             fans: fans
         ))
     case "diagnose":
+        let smc = try AppleSMCClient().open()
         let lines = smc.diagnosticLines()
         FileHandle.standardOutput.write(Data((lines.joined(separator: "\n") + "\n").utf8))
     case "fan-keys":
+        let smc = try AppleSMCClient().open()
         let lines = smc.fanKeyDiagnosticLines()
         FileHandle.standardOutput.write(Data((lines.joined(separator: "\n") + "\n").utf8))
     case "apply":
+        let smc = try AppleSMCClient().open()
         guard CommandLine.arguments.count >= 3,
               let data = CommandLine.arguments[2].data(using: .utf8) else {
             fail("缺少风扇控制参数")
@@ -48,6 +55,7 @@ do {
         }
         writeJSON(ProbeStatus(ok: true))
     case "apply-force":
+        let smc = try AppleSMCClient().open()
         guard CommandLine.arguments.count >= 3,
               let data = CommandLine.arguments[2].data(using: .utf8) else {
             fail("缺少风扇控制参数")
@@ -56,6 +64,7 @@ do {
         try smc.setFansWithForceMask(mode: request.mode, fans: request.fans)
         writeJSON(ProbeStatus(ok: true))
     case "apply-mode":
+        let smc = try AppleSMCClient().open()
         guard CommandLine.arguments.count >= 3,
               let data = CommandLine.arguments[2].data(using: .utf8) else {
             fail("缺少风扇控制参数")
@@ -64,6 +73,7 @@ do {
         try smc.setFansWithModeKeys(mode: request.mode, fans: request.fans)
         writeJSON(ProbeStatus(ok: true))
     case "apply-min":
+        let smc = try AppleSMCClient().open()
         guard CommandLine.arguments.count >= 3,
               let data = CommandLine.arguments[2].data(using: .utf8) else {
             fail("缺少风扇控制参数")
@@ -72,6 +82,7 @@ do {
         try smc.setFanMinimums(mode: request.mode, fans: request.fans)
         writeJSON(ProbeStatus(ok: true))
     case "restore-min":
+        let smc = try AppleSMCClient().open()
         guard CommandLine.arguments.count >= 3,
               let data = CommandLine.arguments[2].data(using: .utf8) else {
             fail("缺少风扇恢复参数")
@@ -80,6 +91,7 @@ do {
         try smc.restoreFanMinimums(fans: request.fans)
         writeJSON(ProbeStatus(ok: true))
     case "restore":
+        let smc = try AppleSMCClient().open()
         try smc.restoreAutomaticFanControl()
         writeJSON(ProbeStatus(ok: true))
     default:

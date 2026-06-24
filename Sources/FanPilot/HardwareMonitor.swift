@@ -4,6 +4,7 @@ protocol HardwareMonitoring {
     func readSnapshot() -> HardwareSnapshot
     func useRealHardware()
     func disableRealHardware()
+    func hasInstalledHelper() -> Bool
     func detectInstalledHelper() -> Bool
     func prepareControl() throws -> String
     func diagnose() throws -> String
@@ -112,8 +113,12 @@ final class SMCBackedHardwareMonitor: HardwareMonitoring {
         realHardwareEnabled = false
     }
 
+    func hasInstalledHelper() -> Bool {
+        probe.isPrivilegedHelperInstalled
+    }
+
     func detectInstalledHelper() -> Bool {
-        guard probe.isPrivilegedHelperInstalled else { return false }
+        guard probe.hasCompatiblePrivilegedHelper else { return false }
         realHardwareEnabled = true
         return true
     }
@@ -198,6 +203,7 @@ final class SimulatedHardwareMonitor: HardwareMonitoring {
 
     func useRealHardware() {}
     func disableRealHardware() {}
+    func hasInstalledHelper() -> Bool { false }
     func detectInstalledHelper() -> Bool { false }
 
     func prepareControl() throws -> String {

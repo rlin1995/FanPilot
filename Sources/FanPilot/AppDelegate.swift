@@ -20,8 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        store.restoreAutomaticControl()
-        store.stop()
+        store.prepareForTermination()
     }
 
     private func applyApplicationIcon() {

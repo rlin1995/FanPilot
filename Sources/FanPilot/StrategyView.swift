@@ -86,7 +86,10 @@ struct StrategyView: View {
                         }
                         GridRow {
                             Text(store.text("samplingInterval"))
-                            Stepper(value: $store.strategy.samplingIntervalSeconds, in: 1...10, step: 1) {
+                            Stepper(value: Binding(
+                                get: { store.strategy.samplingIntervalSeconds },
+                                set: { store.updateSamplingInterval($0) }
+                            ), in: 1...10, step: 1) {
                                 Text("\(Int(store.strategy.samplingIntervalSeconds)) \(store.text("seconds"))")
                                     .monospacedDigit()
                             }

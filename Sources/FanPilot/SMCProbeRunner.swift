@@ -7,6 +7,7 @@ struct ProbeSnapshot: Codable {
 }
 
 final class SMCProbeRunner {
+    static let requiredHelperProtocolVersion = 2
     static let installedHelperPath = "/Library/PrivilegedHelperTools/com.local.FanPilot.SMCProbe"
     private let bundledExecutableURL: URL?
 
@@ -19,6 +20,15 @@ final class SMCProbeRunner {
 
     var isPrivilegedHelperInstalled: Bool {
         FileManager.default.isExecutableFile(atPath: Self.installedHelperPath)
+    }
+
+    var hasCompatiblePrivilegedHelper: Bool {
+        guard isPrivilegedHelperInstalled else { return false }
+        return (try? helperVersion(timeout: 2).version) == Self.requiredHelperProtocolVersion
+    }
+
+    func helperVersion(timeout: TimeInterval = 2) throws -> ProbeVersion {
+        try run(arguments: ["version"], timeout: timeout, preferBundled: false)
     }
 
     func snapshot(timeout: TimeInterval = 4) throws -> ProbeSnapshot {
@@ -97,8 +107,8 @@ final class SMCProbeRunner {
         try runAppleScriptAdminCommand(command, timeout: 30)
     }
 
-    private func run<T: Decodable>(arguments: [String], timeout: TimeInterval) throws -> T {
-        guard let executableURL = activeExecutableURL else {
+    private func run<T: Decodable>(arguments: [String], timeout: TimeInterval, preferBundled: Bool = true) throws -> T {
+        guard let executableURL = preferBundled ? activeExecutableURL : installedExecutableURL else {
             throw HardwareControlError.smc("SMC 探测工具未打包")
         }
 
@@ -180,6 +190,11 @@ final class SMCProbeRunner {
         return bundledExecutableURL
     }
 
+    private var installedExecutableURL: URL? {
+        guard isPrivilegedHelperInstalled else { return nil }
+        return URL(fileURLWithPath: Self.installedHelperPath)
+    }
+
     private func runAppleScriptAdminCommand(_ command: String, timeout: TimeInterval) throws {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
@@ -213,6 +228,10 @@ final class SMCProbeRunner {
 
 struct ProbeStatus: Codable {
     var ok: Bool
+}
+
+struct ProbeVersion: Codable {
+    var version: Int
 }
 
 struct ProbeApplyRequest: Codable {

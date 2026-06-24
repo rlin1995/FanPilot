@@ -163,6 +163,28 @@ struct StrategySettings: Codable, Hashable {
     ]
 }
 
+enum HelperInstallState {
+    case missing
+    case bundled
+    case installed
+    case attempted
+}
+
+enum SMCAccessState {
+    case monitorOnly
+    case checking
+    case available
+    case unavailable
+    case recovering
+}
+
+enum ControlPermissionState {
+    case monitorOnly
+    case ready
+    case active
+    case writeRestricted
+}
+
 extension Double {
     var temperatureText: String {
         "\(Int(self.rounded()))°C"
