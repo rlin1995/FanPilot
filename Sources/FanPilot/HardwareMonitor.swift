@@ -118,13 +118,22 @@ final class SMCBackedHardwareMonitor: HardwareMonitoring {
     }
 
     func detectInstalledHelper() -> Bool {
-        guard probe.hasCompatiblePrivilegedHelper else { return false }
+        guard probe.isPrivilegedHelperInstalled else { return false }
         realHardwareEnabled = true
         return true
     }
 
     func prepareControl() throws -> String {
         realHardwareEnabled = true
+        if probe.isPrivilegedHelperInstalled {
+            do {
+                try probe.probe()
+                return "授权 helper 已安装"
+            } catch {
+                // Existing helpers from older builds may be unreadable or incompatible.
+                // Reinstall only after the already-installed helper fails a real SMC probe.
+            }
+        }
         try probe.installPrivilegedHelper()
         try probe.probe()
         return probe.isPrivilegedHelperInstalled ? "授权 helper 已安装" : "SMC 探测工具"

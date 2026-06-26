@@ -212,6 +212,8 @@ final class FanPilotStore: ObservableObject {
         case .daily:
             strategy.name = "日常办公"
             strategy.rules = [
+                CoolingRule(threshold: 0, mode: .automatic),
+                CoolingRule(threshold: 60, mode: .quiet),
                 CoolingRule(threshold: 70, mode: .low),
                 CoolingRule(threshold: 82, mode: .medium),
                 CoolingRule(threshold: 92, mode: .high)
@@ -219,6 +221,8 @@ final class FanPilotStore: ObservableObject {
         case .externalDisplay:
             strategy.name = "外接显示器"
             strategy.rules = [
+                CoolingRule(threshold: 0, mode: .automatic),
+                CoolingRule(threshold: 58, mode: .quiet),
                 CoolingRule(threshold: 65, mode: .low),
                 CoolingRule(threshold: 76, mode: .medium),
                 CoolingRule(threshold: 86, mode: .high),
@@ -227,6 +231,7 @@ final class FanPilotStore: ObservableObject {
         case .heavyLoad:
             strategy.name = "高负载"
             strategy.rules = [
+                CoolingRule(threshold: 0, mode: .quiet),
                 CoolingRule(threshold: 60, mode: .low),
                 CoolingRule(threshold: 72, mode: .medium),
                 CoolingRule(threshold: 82, mode: .high),

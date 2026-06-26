@@ -16,6 +16,10 @@ struct SafetyView: View {
         store.controlPermissionState == .writeRestricted
     }
 
+    private var primaryControlButtonTitle: String {
+        hasSMCAccess ? store.text("enableFanControl") : store.text("installUpdateHelper")
+    }
+
     private var statusTitle: String {
         if store.isControlEnabled { return store.text("controlEnabledTitle") }
         if writeRestricted { return store.text("writeRestrictedTitle") }
@@ -68,7 +72,7 @@ struct SafetyView: View {
                             fittedButton(store.text("detectAppleSMC")) {
                                 store.detectSMC()
                             }
-                            fittedButton(store.text("installUpdateHelper")) {
+                            fittedButton(primaryControlButtonTitle) {
                                 store.enableControl()
                             }
                             .buttonStyle(.borderedProminent)

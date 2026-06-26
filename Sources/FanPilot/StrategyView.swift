@@ -27,8 +27,13 @@ struct StrategyView: View {
 
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
-                        Text(store.text("temperatureRules"))
-                            .font(.headline)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(store.text("temperatureRules"))
+                                .font(.headline)
+                            Text(store.text("temperatureRulesHint"))
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        }
                         Spacer()
                         Button {
                             store.addRule()
@@ -47,7 +52,7 @@ struct StrategyView: View {
                             Text("°C")
                                 .foregroundStyle(.secondary)
                             Picker(store.text("mode"), selection: $rule.mode) {
-                                ForEach(CoolingMode.allCases.filter { $0 != .automatic }) { mode in
+                                ForEach(CoolingMode.allCases) { mode in
                                     Text(store.title(for: mode)).tag(mode)
                                 }
                             }
