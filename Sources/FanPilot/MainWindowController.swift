@@ -54,6 +54,8 @@ struct FanPilotRootView: View {
                         SensorsView(store: store)
                     case .strategy:
                         StrategyView(store: store)
+                    case .power:
+                        PowerView(store: store)
                     case .safety:
                         SafetyView(store: store)
                     }

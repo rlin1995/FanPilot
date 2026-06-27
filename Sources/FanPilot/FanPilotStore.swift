@@ -570,6 +570,7 @@ enum AppTab: String, CaseIterable, Identifiable {
     case overview
     case sensors
     case strategy
+    case power
     case safety
 
     var id: String { rawValue }
@@ -579,6 +580,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .overview: "overview"
         case .sensors: "sensors"
         case .strategy: "strategy"
+        case .power: "power"
         case .safety: "safety"
         }
     }
@@ -588,6 +590,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .overview: "概览"
         case .sensors: "传感器"
         case .strategy: "策略"
+        case .power: "电源"
         case .safety: "安全与权限"
         }
     }
@@ -597,6 +600,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .overview: "fan"
         case .sensors: "thermometer.medium"
         case .strategy: "slider.horizontal.3"
+        case .power: "bolt.batteryblock"
         case .safety: "lock.shield"
         }
     }
