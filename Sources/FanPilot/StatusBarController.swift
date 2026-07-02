@@ -125,6 +125,11 @@ final class StatusBarContentView: NSView {
         nil
     }
 
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
 
@@ -133,8 +138,11 @@ final class StatusBarContentView: NSView {
         let lineHeight: CGFloat = 10
         let centerY = bounds.midY
 
-        let configuration = NSImage.SymbolConfiguration(paletteColors: [.white])
-        if let icon = NSImage(systemSymbolName: "fan", accessibilityDescription: "FanPilot")?.withSymbolConfiguration(configuration) {
+        let foregroundColor = NSColor.labelColor
+        let configuration = NSImage.SymbolConfiguration(paletteColors: [foregroundColor])
+        let icon = NSImage(systemSymbolName: "fan", accessibilityDescription: "FanPilot")
+            ?? NSImage(systemSymbolName: "fanblades", accessibilityDescription: "FanPilot")
+        if let icon = icon?.withSymbolConfiguration(configuration) {
             icon.draw(
                 in: NSRect(
                     x: 2,
@@ -146,11 +154,21 @@ final class StatusBarContentView: NSView {
                 operation: .sourceOver,
                 fraction: 1
             )
+        } else {
+            drawFallbackFan(
+                in: NSRect(
+                    x: 2,
+                    y: centerY - iconSize / 2,
+                    width: iconSize,
+                    height: iconSize
+                ),
+                color: foregroundColor
+            )
         }
 
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .semibold),
-            .foregroundColor: NSColor.white
+            .foregroundColor: foregroundColor
         ]
         let topLineRect = NSRect(
             x: textX,
@@ -166,6 +184,54 @@ final class StatusBarContentView: NSView {
         )
         temperatureText.draw(in: topLineRect, withAttributes: attributes)
         rpmText.draw(in: bottomLineRect, withAttributes: attributes)
+    }
+
+    private func drawFallbackFan(in rect: NSRect, color: NSColor) {
+        let center = NSPoint(x: rect.midX, y: rect.midY)
+        let radius = min(rect.width, rect.height) * 0.43
+
+        color.setFill()
+        for index in 0..<3 {
+            let angle = CGFloat(index) * 2 * .pi / 3
+            let path = NSBezierPath()
+            path.move(to: center)
+            path.curve(
+                to: NSPoint(
+                    x: center.x + cos(angle + 0.82) * radius,
+                    y: center.y + sin(angle + 0.82) * radius
+                ),
+                controlPoint1: NSPoint(
+                    x: center.x + cos(angle + 0.15) * radius * 0.38,
+                    y: center.y + sin(angle + 0.15) * radius * 0.38
+                ),
+                controlPoint2: NSPoint(
+                    x: center.x + cos(angle + 0.46) * radius,
+                    y: center.y + sin(angle + 0.46) * radius
+                )
+            )
+            path.curve(
+                to: center,
+                controlPoint1: NSPoint(
+                    x: center.x + cos(angle + 1.18) * radius * 0.82,
+                    y: center.y + sin(angle + 1.18) * radius * 0.82
+                ),
+                controlPoint2: NSPoint(
+                    x: center.x + cos(angle + 1.42) * radius * 0.22,
+                    y: center.y + sin(angle + 1.42) * radius * 0.22
+                )
+            )
+            path.close()
+            path.fill()
+        }
+
+        NSBezierPath(
+            ovalIn: NSRect(
+                x: center.x - radius * 0.16,
+                y: center.y - radius * 0.16,
+                width: radius * 0.32,
+                height: radius * 0.32
+            )
+        ).fill()
     }
 }
 

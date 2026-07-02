@@ -83,11 +83,12 @@ struct FanPilotRootView: View {
                 set: { store.setPreset($0) }
             )) {
                 ForEach(Preset.allCases) { preset in
-                    Text(store.title(for: preset)).tag(preset)
+                    Text(store.displayedTitle(for: preset)).tag(preset)
                 }
             }
             .frame(width: 150)
-            StatusPill(text: store.isControlEnabled ? store.text("controlling") : store.text("monitoring"), color: store.isControlEnabled ? .green : .blue)
+            StatusPill(text: store.strategyStatusText, color: strategyStatusColor)
+                .animation(.easeInOut(duration: 0.2), value: store.strategyApplicationPhase)
             Button {
                 store.restoreAutomaticControl()
             } label: {
@@ -97,6 +98,17 @@ struct FanPilotRootView: View {
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 16)
+    }
+
+    private var strategyStatusColor: Color {
+        switch store.strategyApplicationPhase {
+        case .switching:
+            return .orange
+        case .active:
+            return .green
+        case .idle:
+            return store.isControlEnabled ? .green : .blue
+        }
     }
 }
 

@@ -9,9 +9,9 @@ extension HardwareControlError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unavailable:
-            "不可用"
+            return "不可用"
         case .smc(let message):
-            message
+            return message
         }
     }
 }

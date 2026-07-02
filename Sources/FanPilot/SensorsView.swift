@@ -79,13 +79,13 @@ struct SensorsView: View {
 
     private func icon(for category: SensorCategory) -> String {
         switch category {
-        case .all: "list.bullet"
-        case .cpu: "cpu"
-        case .battery: "battery.75"
-        case .enclosure: "macbook"
-        case .wireless: "wifi"
-        case .storage: "internaldrive"
-        case .other: "sensor"
+        case .all: return "list.bullet"
+        case .cpu: return "cpu"
+        case .battery: return "battery.75"
+        case .enclosure: return "macbook"
+        case .wireless: return "wifi"
+        case .storage: return "internaldrive"
+        case .other: return "sensor"
         }
     }
 }

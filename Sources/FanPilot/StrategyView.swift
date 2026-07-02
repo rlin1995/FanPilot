@@ -2,6 +2,13 @@ import SwiftUI
 
 struct StrategyView: View {
     @ObservedObject var store: FanPilotStore
+    @State private var draft: StrategySettings
+    @State private var didSave = false
+
+    init(store: FanPilotStore) {
+        self.store = store
+        _draft = State(initialValue: store.strategy)
+    }
 
     var body: some View {
         ScrollView {
@@ -10,13 +17,24 @@ struct StrategyView: View {
 
                 HStack(spacing: 16) {
                     LabeledContent(store.text("strategyName")) {
-                        TextField(store.text("strategyName"), text: $store.strategy.name)
+                        if store.selectedPreset == .custom {
+                            TextField(store.text("strategyName"), text: $draft.name)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 220)
+                        } else {
+                            TextField(
+                                store.text("strategyName"),
+                                text: .constant(store.currentStrategyName)
+                            )
                             .textFieldStyle(.roundedBorder)
+                            .disabled(true)
                             .frame(width: 220)
+                            .help(store.text("presetNameLocked"))
+                        }
                     }
 
                     LabeledContent(store.text("controlSensor")) {
-                        Picker("", selection: $store.strategy.controlSensorID) {
+                        Picker("", selection: $draft.controlSensorID) {
                             ForEach(store.sensors) { sensor in
                                 Text(sensor.name).tag(sensor.id)
                             }
@@ -36,13 +54,13 @@ struct StrategyView: View {
                         }
                         Spacer()
                         Button {
-                            store.addRule()
+                            draft.rules.append(CoolingRule(threshold: 75, mode: .medium))
                         } label: {
                             Label(store.text("addRule"), systemImage: "plus")
                         }
                     }
 
-                    ForEach($store.strategy.rules) { $rule in
+                    ForEach($draft.rules) { $rule in
                         HStack(spacing: 12) {
                             Text("≥")
                                 .foregroundStyle(.secondary)
@@ -59,7 +77,7 @@ struct StrategyView: View {
                             .frame(width: 130)
                             Spacer()
                             Button(role: .destructive) {
-                                store.removeRule(rule)
+                                draft.rules.removeAll { $0.id == rule.id }
                             } label: {
                                 Image(systemName: "trash")
                             }
@@ -77,54 +95,70 @@ struct StrategyView: View {
                     Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 12) {
                         GridRow {
                             Text(store.text("hysteresis"))
-                            Stepper(value: $store.strategy.hysteresis, in: 1...15, step: 1) {
-                                Text("\(Int(store.strategy.hysteresis))°C")
+                            Stepper(value: $draft.hysteresis, in: 1...15, step: 1) {
+                                Text("\(Int(draft.hysteresis))°C")
                                     .monospacedDigit()
                             }
                         }
                         GridRow {
                             Text(store.text("minimumHold"))
-                            Stepper(value: $store.strategy.minimumHoldSeconds, in: 5...180, step: 5) {
-                                Text("\(store.strategy.minimumHoldSeconds) \(store.text("seconds"))")
+                            Stepper(value: $draft.minimumHoldSeconds, in: 5...180, step: 5) {
+                                Text("\(draft.minimumHoldSeconds) \(store.text("seconds"))")
                                     .monospacedDigit()
                             }
                         }
                         GridRow {
                             Text(store.text("samplingInterval"))
-                            Stepper(value: Binding(
-                                get: { store.strategy.samplingIntervalSeconds },
-                                set: { store.updateSamplingInterval($0) }
-                            ), in: 1...10, step: 1) {
-                                Text("\(Int(store.strategy.samplingIntervalSeconds)) \(store.text("seconds"))")
+                            Stepper(value: $draft.samplingIntervalSeconds, in: 1...10, step: 1) {
+                                Text("\(Int(draft.samplingIntervalSeconds)) \(store.text("seconds"))")
                                     .monospacedDigit()
                             }
                         }
                         GridRow {
                             Text(store.text("emergencyFull"))
-                            Stepper(value: $store.strategy.emergencyFullSpeedTemperature, in: 85...105, step: 1) {
-                                Text("\(Int(store.strategy.emergencyFullSpeedTemperature))°C")
+                            Stepper(value: $draft.emergencyFullSpeedTemperature, in: 85...105, step: 1) {
+                                Text("\(Int(draft.emergencyFullSpeedTemperature))°C")
                                     .monospacedDigit()
                             }
                         }
                     }
-                    Toggle(store.text("restoreOnQuit"), isOn: $store.strategy.restoreAutomaticOnQuit)
-                    Toggle(store.text("restoreAfterWake"), isOn: $store.strategy.restoreAutomaticAfterWake)
+                    Toggle(store.text("restoreOnQuit"), isOn: $draft.restoreAutomaticOnQuit)
+                    Toggle(store.text("restoreAfterWake"), isOn: $draft.restoreAutomaticAfterWake)
                 }
                 .padding(16)
                 .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
 
                 HStack {
-                    Button(store.text("restoreDailyDefaults")) {
-                        store.setPreset(.daily)
+                    Button(store.restoreCurrentDefaultsTitle) {
+                        store.restoreCurrentPresetDefaults()
+                        draft = store.strategy
+                        didSave = false
                     }
                     Spacer()
-                    Button(store.text("saveStrategy")) {
-                        store.setPreset(.custom)
+                    Button {
+                        store.saveStrategy(draft)
+                        draft = store.strategy
+                        didSave = true
+                    } label: {
+                        Label(
+                            store.text(didSave ? "strategySaved" : "saveStrategy"),
+                            systemImage: didSave ? "checkmark" : "square.and.arrow.down"
+                        )
                     }
                     .buttonStyle(.borderedProminent)
                 }
             }
             .padding(24)
+        }
+        .onAppear {
+            draft = store.strategy
+        }
+        .onChange(of: store.selectedPreset) { _ in
+            draft = store.strategy
+            didSave = false
+        }
+        .onChange(of: draft) { _ in
+            didSave = false
         }
     }
 }

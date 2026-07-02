@@ -21,14 +21,24 @@ final class FanPilotStore: ObservableObject {
     @Published var helperState: HelperInstallState = .missing
     @Published var smcAccessState: SMCAccessState = .monitorOnly
     @Published var controlPermissionState: ControlPermissionState = .monitorOnly
+    @Published private(set) var modifiedPresets: Set<Preset> = []
+    @Published private(set) var strategyApplicationPhase: StrategyApplicationPhase = .idle
 
     private let monitor: HardwareMonitoring
+    private let defaults: UserDefaults
     private var timer: Timer?
     private var lastModeChange = Date.distantPast
     private var baselineFansForRestore: [FanReading] = []
+    private var savedCustomStrategy: StrategySettings?
+    private var presetStrategies: [Preset: StrategySettings] = [:]
+    private var strategyFeedbackGeneration = 0
 
-    init(monitor: HardwareMonitoring = SMCBackedHardwareMonitor()) {
+    init(
+        monitor: HardwareMonitoring = SMCBackedHardwareMonitor(),
+        defaults: UserDefaults = .standard
+    ) {
         self.monitor = monitor
+        self.defaults = defaults
         load()
     }
 
@@ -69,13 +79,44 @@ final class FanPilotStore: ObservableObject {
         localizer.text(preset.localizationKey)
     }
 
+    func displayedTitle(for preset: Preset) -> String {
+        if preset == .custom,
+           let customName = savedCustomStrategy?.name.trimmingCharacters(in: .whitespacesAndNewlines),
+           !customName.isEmpty {
+            return customName
+        }
+        return title(for: preset) + (modifiedPresets.contains(preset) ? " *" : "")
+    }
+
+    var currentStrategyName: String {
+        if selectedPreset == .custom {
+            return strategy.name
+        }
+        return title(for: selectedPreset) + (modifiedPresets.contains(selectedPreset) ? " *" : "")
+    }
+
+    var restoreCurrentDefaultsTitle: String {
+        String(format: text("restorePresetDefaults"), title(for: selectedPreset))
+    }
+
+    var strategyStatusText: String {
+        switch strategyApplicationPhase {
+        case .idle:
+            return isControlEnabled ? text("controlling") : text("monitoring")
+        case .switching:
+            return text("strategySwitching")
+        case .active:
+            return text("strategyActive")
+        }
+    }
+
     func title(for category: SensorCategory) -> String {
         localizer.text(category.localizationKey)
     }
 
     func setLanguage(_ language: AppLanguage) {
         self.language = language
-        UserDefaults.standard.set(language.rawValue, forKey: "FanPilot.language")
+        defaults.set(language.rawValue, forKey: "FanPilot.language")
     }
 
     func updateSamplingInterval(_ interval: Double) {
@@ -207,44 +248,59 @@ final class FanPilotStore: ObservableObject {
     }
 
     func setPreset(_ preset: Preset) {
+        beginStrategyFeedback(for: preset)
+        strategy = storedStrategy(for: preset)
         selectedPreset = preset
-        switch preset {
-        case .daily:
-            strategy.name = "日常办公"
-            strategy.rules = [
-                CoolingRule(threshold: 0, mode: .automatic),
-                CoolingRule(threshold: 60, mode: .quiet),
-                CoolingRule(threshold: 70, mode: .low),
-                CoolingRule(threshold: 82, mode: .medium),
-                CoolingRule(threshold: 92, mode: .high)
-            ]
-        case .externalDisplay:
-            strategy.name = "外接显示器"
-            strategy.rules = [
-                CoolingRule(threshold: 0, mode: .automatic),
-                CoolingRule(threshold: 58, mode: .quiet),
-                CoolingRule(threshold: 65, mode: .low),
-                CoolingRule(threshold: 76, mode: .medium),
-                CoolingRule(threshold: 86, mode: .high),
-                CoolingRule(threshold: 94, mode: .full)
-            ]
-        case .heavyLoad:
-            strategy.name = "高负载"
-            strategy.rules = [
-                CoolingRule(threshold: 0, mode: .quiet),
-                CoolingRule(threshold: 60, mode: .low),
-                CoolingRule(threshold: 72, mode: .medium),
-                CoolingRule(threshold: 82, mode: .high),
-                CoolingRule(threshold: 90, mode: .full)
-            ]
-        case .manualFull:
-            manualMode = .full
-            apply(mode: .full)
-        case .custom:
-            strategy.name = "自定义"
-        }
         save()
-        evaluateStrategy(force: true)
+        restartTimer()
+        applySelectedStrategyImmediately()
+        finishStrategyFeedback(for: preset)
+    }
+
+    func saveStrategy(_ draft: StrategySettings) {
+        let preset = selectedPreset
+        beginStrategyFeedback(for: preset)
+        var savedStrategy = draft
+        savedStrategy.rules.sort { $0.threshold < $1.threshold }
+        if preset == .custom {
+            let trimmedName = savedStrategy.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            savedStrategy.name = trimmedName.isEmpty ? title(for: .custom) : trimmedName
+            savedCustomStrategy = savedStrategy
+        } else {
+            savedStrategy.name = StrategySettings.defaults(for: preset).name
+            if savedStrategy.matchesDefaults(for: preset) {
+                savedStrategy = StrategySettings.defaults(for: preset)
+                presetStrategies.removeValue(forKey: preset)
+                modifiedPresets.remove(preset)
+            } else {
+                presetStrategies[preset] = savedStrategy
+                modifiedPresets.insert(preset)
+            }
+        }
+        strategy = savedStrategy
+        savePresetLibrary()
+        save()
+        restartTimer()
+        applySelectedStrategyImmediately()
+        finishStrategyFeedback(for: preset)
+    }
+
+    func restoreCurrentPresetDefaults() {
+        let preset = selectedPreset
+        beginStrategyFeedback(for: preset)
+        let restoredStrategy = StrategySettings.defaults(for: preset)
+        if preset == .custom {
+            savedCustomStrategy = restoredStrategy
+        } else {
+            presetStrategies.removeValue(forKey: preset)
+            modifiedPresets.remove(preset)
+        }
+        strategy = restoredStrategy
+        savePresetLibrary()
+        save()
+        restartTimer()
+        applySelectedStrategyImmediately()
+        finishStrategyFeedback(for: preset)
     }
 
     func setManualMode(_ mode: CoolingMode) {
@@ -457,44 +513,64 @@ final class FanPilotStore: ObservableObject {
         evaluateStrategy(force: true)
     }
 
-    func addRule() {
-        strategy.rules.append(CoolingRule(threshold: 75, mode: .medium))
-        strategy.rules.sort { $0.threshold < $1.threshold }
-        selectedPreset = .custom
+    private func storedStrategy(for preset: Preset) -> StrategySettings {
+        if preset == .custom {
+            return savedCustomStrategy ?? StrategySettings.defaults(for: .custom)
+        }
+        return presetStrategies[preset] ?? StrategySettings.defaults(for: preset)
     }
 
-    func removeRule(_ rule: CoolingRule) {
-        strategy.rules.removeAll { $0.id == rule.id }
-        selectedPreset = .custom
+    private func applySelectedStrategyImmediately() {
+        if selectedPreset == .manualFull {
+            manualMode = .full
+            apply(mode: .full)
+            return
+        }
+
+        manualMode = .automatic
+        apply(mode: .automatic)
+        evaluateStrategy(force: true)
+    }
+
+    private func beginStrategyFeedback(for preset: Preset) {
+        strategyFeedbackGeneration += 1
+        strategyApplicationPhase = .switching(preset)
+    }
+
+    private func finishStrategyFeedback(for preset: Preset) {
+        let generation = strategyFeedbackGeneration
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { [weak self] in
+            guard let self, self.strategyFeedbackGeneration == generation else { return }
+            self.strategyApplicationPhase = .active(preset)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { [weak self] in
+                guard let self, self.strategyFeedbackGeneration == generation else { return }
+                self.strategyApplicationPhase = .idle
+            }
+        }
     }
 
     private func evaluateStrategy(force: Bool = false) {
         guard manualMode == .automatic, let sensor = controlSensor else { return }
-        let nextMode: CoolingMode
-        if sensor.temperature >= strategy.emergencyFullSpeedTemperature {
-            nextMode = .full
-        } else {
-            nextMode = modeForTemperature(sensor.temperature)
-        }
-        let canChange = force || Date().timeIntervalSince(lastModeChange) >= Double(strategy.minimumHoldSeconds)
+        let nextMode = CoolingStrategyEvaluator.mode(
+            for: sensor.temperature,
+            rules: strategy.rules,
+            currentMode: currentStrategyMode,
+            hysteresis: strategy.hysteresis,
+            emergencyTemperature: strategy.emergencyFullSpeedTemperature
+        )
+        let isEmergency = sensor.temperature >= strategy.emergencyFullSpeedTemperature
+        let canChange = force
+            || isEmergency
+            || Date().timeIntervalSince(lastModeChange) >= Double(strategy.minimumHoldSeconds)
         if canChange, nextMode != currentStrategyMode {
             lastModeChange = Date()
             apply(mode: nextMode)
         }
     }
 
-    private func modeForTemperature(_ temperature: Double) -> CoolingMode {
-        let sortedRules = strategy.rules.sorted { $0.threshold < $1.threshold }
-        guard currentStrategyMode != .automatic,
-              let currentRule = sortedRules.last(where: { $0.mode == currentStrategyMode }),
-              temperature > currentRule.threshold - strategy.hysteresis else {
-            return sortedRules.last { temperature >= $0.threshold }?.mode ?? .automatic
-        }
-        return currentStrategyMode
-    }
-
     private func apply(mode: CoolingMode) {
         guard isControlEnabled else {
+            currentStrategyMode = mode
             lastWrite = "监控模式：策略建议 \(title(for: mode))，未写入 SMC"
             return
         }
@@ -520,6 +596,7 @@ final class FanPilotStore: ObservableObject {
             isWriteRestricted = true
             helperStatus = "授权 helper 已安装"
             smcStatus = "AppleSMC 可访问，写入受限"
+            controlPermissionState = .writeRestricted
             currentStrategyMode = .automatic
         }
     }
@@ -543,26 +620,65 @@ final class FanPilotStore: ObservableObject {
 
     private func save() {
         if let data = try? JSONEncoder().encode(strategy) {
-            UserDefaults.standard.set(data, forKey: "FanPilot.strategy")
+            defaults.set(data, forKey: "FanPilot.strategy")
+            if selectedPreset == .custom {
+                defaults.set(data, forKey: "FanPilot.customStrategy")
+                savedCustomStrategy = strategy
+            }
         }
-        UserDefaults.standard.set(selectedPreset.rawValue, forKey: "FanPilot.preset")
-        UserDefaults.standard.set(isControlEnabled, forKey: "FanPilot.controlEnabled")
+        defaults.set(selectedPreset.rawValue, forKey: "FanPilot.preset")
+        defaults.set(isControlEnabled, forKey: "FanPilot.controlEnabled")
+    }
+
+    private func savePresetLibrary() {
+        let encodedStrategies = Dictionary(
+            uniqueKeysWithValues: presetStrategies.map { ($0.key.rawValue, $0.value) }
+        )
+        if let data = try? JSONEncoder().encode(encodedStrategies) {
+            defaults.set(data, forKey: "FanPilot.presetStrategies")
+        }
+        defaults.set(modifiedPresets.map(\.rawValue), forKey: "FanPilot.modifiedPresets")
     }
 
     private func load() {
-        if let data = UserDefaults.standard.data(forKey: "FanPilot.strategy"),
+        var loadedStrategy: StrategySettings?
+        if let data = defaults.data(forKey: "FanPilot.strategy"),
            let decoded = try? JSONDecoder().decode(StrategySettings.self, from: data) {
-            strategy = decoded
+            loadedStrategy = decoded
         }
-        if let raw = UserDefaults.standard.string(forKey: "FanPilot.preset"),
+        if let data = defaults.data(forKey: "FanPilot.customStrategy"),
+           let decoded = try? JSONDecoder().decode(StrategySettings.self, from: data) {
+            savedCustomStrategy = decoded
+        }
+        if let data = defaults.data(forKey: "FanPilot.presetStrategies"),
+           let decoded = try? JSONDecoder().decode([String: StrategySettings].self, from: data) {
+            presetStrategies = Dictionary(
+                uniqueKeysWithValues: decoded.compactMap { key, value in
+                    Preset(rawValue: key).map { ($0, value) }
+                }
+            )
+        }
+        let savedModifiedPresets = defaults.stringArray(forKey: "FanPilot.modifiedPresets") ?? []
+        modifiedPresets = Set(savedModifiedPresets.compactMap(Preset.init(rawValue:)))
+        modifiedPresets.formUnion(presetStrategies.keys)
+        if let raw = defaults.string(forKey: "FanPilot.preset"),
            let preset = Preset(rawValue: raw) {
             selectedPreset = preset
         }
-        if let raw = UserDefaults.standard.string(forKey: "FanPilot.language"),
+        if let raw = defaults.string(forKey: "FanPilot.language"),
            let savedLanguage = AppLanguage(rawValue: raw) {
             language = savedLanguage
         }
-        isControlEnabled = UserDefaults.standard.bool(forKey: "FanPilot.controlEnabled")
+        isControlEnabled = defaults.bool(forKey: "FanPilot.controlEnabled")
+
+        if selectedPreset == .custom {
+            if savedCustomStrategy == nil {
+                savedCustomStrategy = loadedStrategy ?? StrategySettings.defaults(for: .custom)
+            }
+            strategy = savedCustomStrategy ?? StrategySettings.defaults(for: .custom)
+        } else {
+            strategy = presetStrategies[selectedPreset] ?? StrategySettings.defaults(for: selectedPreset)
+        }
     }
 }
 
@@ -577,31 +693,31 @@ enum AppTab: String, CaseIterable, Identifiable {
 
     var localizationKey: String {
         switch self {
-        case .overview: "overview"
-        case .sensors: "sensors"
-        case .strategy: "strategy"
-        case .power: "power"
-        case .safety: "safety"
+        case .overview: return "overview"
+        case .sensors: return "sensors"
+        case .strategy: return "strategy"
+        case .power: return "power"
+        case .safety: return "safety"
         }
     }
 
     var title: String {
         switch self {
-        case .overview: "概览"
-        case .sensors: "传感器"
-        case .strategy: "策略"
-        case .power: "电源"
-        case .safety: "安全与权限"
+        case .overview: return "概览"
+        case .sensors: return "传感器"
+        case .strategy: return "策略"
+        case .power: return "电源"
+        case .safety: return "安全与权限"
         }
     }
 
     var symbol: String {
         switch self {
-        case .overview: "fan"
-        case .sensors: "thermometer.medium"
-        case .strategy: "slider.horizontal.3"
-        case .power: "bolt.batteryblock"
-        case .safety: "lock.shield"
+        case .overview: return "fan"
+        case .sensors: return "thermometer.medium"
+        case .strategy: return "slider.horizontal.3"
+        case .power: return "bolt.batteryblock"
+        case .safety: return "lock.shield"
         }
     }
 }

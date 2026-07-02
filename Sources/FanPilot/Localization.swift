@@ -9,9 +9,9 @@ enum AppLanguage: String, CaseIterable, Identifiable, Codable {
 
     var nativeTitle: String {
         switch self {
-        case .simplifiedChinese: "简体中文"
-        case .traditionalChinese: "繁體中文"
-        case .english: "English"
+        case .simplifiedChinese: return "简体中文"
+        case .traditionalChinese: return "繁體中文"
+        case .english: return "English"
         }
     }
 }
@@ -32,6 +32,8 @@ struct Localizer {
         "currentPreset": [.simplifiedChinese: "当前预设", .traditionalChinese: "目前預設", .english: "Preset"],
         "monitoring": [.simplifiedChinese: "监控中", .traditionalChinese: "監控中", .english: "Monitoring"],
         "controlling": [.simplifiedChinese: "控制中", .traditionalChinese: "控制中", .english: "Controlling"],
+        "strategySwitching": [.simplifiedChinese: "切换策略…", .traditionalChinese: "切換策略…", .english: "Switching…"],
+        "strategyActive": [.simplifiedChinese: "策略已生效", .traditionalChinese: "策略已生效", .english: "Strategy Active"],
         "restoreAuto": [.simplifiedChinese: "恢复自动", .traditionalChinese: "恢復自動", .english: "Restore Auto"],
         "restoreAppleAuto": [.simplifiedChinese: "恢复 Apple 自动控制", .traditionalChinese: "恢復 Apple 自動控制", .english: "Restore Apple Auto"],
         "openFanPilot": [.simplifiedChinese: "打开 FanPilot", .traditionalChinese: "開啟 FanPilot", .english: "Open FanPilot"],
@@ -103,6 +105,7 @@ struct Localizer {
         "safetyNotice": [.simplifiedChinese: "首次启用或更新时，FanPilot 会安装一个本地授权 helper；已安装可用时会直接复用，并通过它访问 AppleSMC。FanPilot 只会提高最低风扇转速，不会低于 Apple 默认最低值；任何读取或写入失败都会自动回到监控模式。", .traditionalChinese: "首次啟用或更新時，FanPilot 會安裝一個本機授權 helper；已安裝可用時會直接沿用，並透過它存取 AppleSMC。FanPilot 只會提高最低風扇轉速，不會低於 Apple 預設最低值；任何讀取或寫入失敗都會自動回到監控模式。", .english: "On first enable or update, FanPilot installs a local authorized helper. When a usable helper is already installed, FanPilot reuses it to access AppleSMC. FanPilot only raises fan speed targets and never goes below Apple defaults. Any read or write failure returns the app to monitoring mode."],
         "strategySubtitle": [.simplifiedChinese: "根据一个主控传感器自动切换散热档位", .traditionalChinese: "根據一個主控感測器自動切換散熱檔位", .english: "Switch cooling modes from one control sensor"],
         "strategyName": [.simplifiedChinese: "策略名称", .traditionalChinese: "策略名稱", .english: "Strategy Name"],
+        "presetNameLocked": [.simplifiedChinese: "预设策略不支持重命名；请选择“自定义”创建个性名称。", .traditionalChinese: "預設策略不支援重新命名；請選擇「自訂」建立個人名稱。", .english: "Preset strategies cannot be renamed. Choose Custom to use a personal name."],
         "temperatureRules": [.simplifiedChinese: "温度规则", .traditionalChinese: "溫度規則", .english: "Temperature Rules"],
         "temperatureRulesHint": [.simplifiedChinese: "按从低到高的阈值匹配；低温可设为自动或静音。", .traditionalChinese: "依由低到高的門檻匹配；低溫可設為自動或靜音。", .english: "Matched from low to high thresholds. Low temperatures can use Auto or Quiet."],
         "addRule": [.simplifiedChinese: "新增规则", .traditionalChinese: "新增規則", .english: "Add Rule"],
@@ -116,7 +119,9 @@ struct Localizer {
         "restoreOnQuit": [.simplifiedChinese: "退出应用时恢复 Apple 自动控制", .traditionalChinese: "結束應用時恢復 Apple 自動控制", .english: "Restore Apple auto control on quit"],
         "restoreAfterWake": [.simplifiedChinese: "睡眠唤醒后恢复自动并重新评估策略", .traditionalChinese: "睡眠喚醒後恢復自動並重新評估策略", .english: "Restore auto and reevaluate after wake"],
         "restoreDailyDefaults": [.simplifiedChinese: "恢复日常办公默认值", .traditionalChinese: "恢復日常辦公預設值", .english: "Restore Daily Defaults"],
+        "restorePresetDefaults": [.simplifiedChinese: "恢复 %@ 默认值", .traditionalChinese: "恢復 %@ 預設值", .english: "Restore %@ Defaults"],
         "saveStrategy": [.simplifiedChinese: "保存策略", .traditionalChinese: "儲存策略", .english: "Save Strategy"],
+        "strategySaved": [.simplifiedChinese: "已保存", .traditionalChinese: "已儲存", .english: "Saved"],
         "seconds": [.simplifiedChinese: "秒", .traditionalChinese: "秒", .english: "sec"],
 
         "power.subtitle": [.simplifiedChinese: "电池、充电器与 macOS 电源设置", .traditionalChinese: "電池、充電器與 macOS 電源設定", .english: "Battery, charger, and macOS power settings"],
