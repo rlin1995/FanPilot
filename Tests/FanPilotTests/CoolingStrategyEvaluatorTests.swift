@@ -76,6 +76,7 @@ final class CustomStrategyPersistenceTests: XCTestCase {
 
         XCTAssertEqual(store.selectedPreset, .custom)
         XCTAssertEqual(store.strategy.name, "散热优先")
+        XCTAssertEqual(store.displayedTitle(for: .custom), "散热优先")
     }
 
     func testCustomStrategySurvivesPresetChangesAndRelaunch() {
@@ -159,5 +160,100 @@ final class CustomStrategyPersistenceTests: XCTestCase {
 
         XCTAssertEqual(store.strategy.name, "自定义")
         XCTAssertEqual(store.displayedTitle(for: .custom), "自定义")
+    }
+
+    func testSystemWakeReappliesSelectedStrategy() {
+        let monitor = MockHardwareMonitor()
+        let store = FanPilotStore(monitor: monitor, defaults: defaults)
+        store.enableControl()
+        store.setPreset(.custom)
+        var draft = store.strategy
+        draft.name = "散热优先"
+        draft.rules = [CoolingRule(threshold: 0, mode: .medium)]
+        store.saveStrategy(draft)
+        monitor.appliedModes.removeAll()
+
+        store.handleSystemWake()
+
+        XCTAssertEqual(store.selectedPreset, .custom)
+        XCTAssertEqual(store.strategy.name, "散热优先")
+        XCTAssertTrue(monitor.restoreAutomaticCallCount >= 1)
+        XCTAssertTrue(monitor.appliedModes.contains(.medium))
+    }
+}
+
+private final class MockHardwareMonitor: HardwareMonitoring {
+    var appliedModes: [CoolingMode] = []
+    var restoreAutomaticCallCount = 0
+    private var realHardwareEnabled = false
+
+    func readSnapshot() -> HardwareSnapshot {
+        HardwareSnapshot(
+            modelIdentifier: "MacBookPro16,2",
+            sensors: [
+                TemperatureSensor(id: "TC0P", name: "CPU Core", category: .cpu, temperature: 72, isFavorite: true)
+            ],
+            fans: [
+                FanReading(id: "F0Ac", name: "Left side", minimumRPM: 1200, currentRPM: 2500, maximumRPM: 6200, mode: .automatic)
+            ],
+            controlAvailable: realHardwareEnabled,
+            controlStatusText: realHardwareEnabled ? "AppleSMC 监控" : "模拟监控模式"
+        )
+    }
+
+    func useRealHardware() {
+        realHardwareEnabled = true
+    }
+
+    func disableRealHardware() {
+        realHardwareEnabled = false
+    }
+
+    func hasInstalledHelper() -> Bool {
+        true
+    }
+
+    func detectInstalledHelper() -> Bool {
+        realHardwareEnabled = true
+        return true
+    }
+
+    func prepareControl() throws -> String {
+        realHardwareEnabled = true
+        return "授权 helper 已安装"
+    }
+
+    func diagnose() throws -> String {
+        "OK"
+    }
+
+    func fanKeys() throws -> String {
+        "OK"
+    }
+
+    func testWrite(mode: CoolingMode, fans: [FanReading], useForceMask: Bool) throws {
+        appliedModes.append(mode)
+    }
+
+    func testModeKeyWrite(mode: CoolingMode, fans: [FanReading]) throws {
+        appliedModes.append(mode)
+    }
+
+    func testMinimumWrite(mode: CoolingMode, fans: [FanReading]) throws {
+        appliedModes.append(mode)
+    }
+
+    func restoreMinimums(fans: [FanReading]) throws {}
+
+    func apply(mode: CoolingMode, to fans: [FanReading]) throws {
+        appliedModes.append(mode)
+    }
+
+    func restoreAutomatic() throws {
+        restoreAutomaticCallCount += 1
+    }
+
+    func uninstallHelper() throws {
+        realHardwareEnabled = false
     }
 }

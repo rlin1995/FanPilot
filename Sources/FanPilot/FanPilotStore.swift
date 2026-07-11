@@ -159,18 +159,25 @@ final class FanPilotStore: ObservableObject {
 
     func handleSystemWake() {
         detectExistingHelper()
-        lastWrite = "系统唤醒，正在重新读取 AppleSMC"
+        beginStrategyFeedback(for: selectedPreset)
+        lastWrite = "系统唤醒，正在重新读取 AppleSMC 并恢复当前策略"
         if strategy.restoreAutomaticAfterWake {
             try? monitor.restoreAutomatic()
             currentStrategyMode = .automatic
             lastModeChange = .distantPast
         }
+        strategy = storedStrategy(for: selectedPreset)
         refresh(evaluate: false)
+        restartTimer()
+        applySelectedStrategyImmediately()
         for delay in [1.0, 3.0, 6.0] {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                self?.refresh(evaluate: delay == 6.0)
+                guard let self else { return }
+                self.refresh(evaluate: false)
+                self.applySelectedStrategyImmediately()
             }
         }
+        finishStrategyFeedback(for: selectedPreset)
     }
 
     func refresh(evaluate: Bool = true) {

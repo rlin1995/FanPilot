@@ -67,7 +67,7 @@ final class StatusBarController {
             menu.addItem(headerItem("\(fan.name)    \(fan.currentRPM) rpm"))
         }
         menu.addItem(.separator())
-        menu.addItem(headerItem("\(store.text("currentPresetMenu"))    \(store.title(for: store.selectedPreset))"))
+        menu.addItem(headerItem("\(store.text("currentPresetMenu"))    \(store.displayedTitle(for: store.selectedPreset))"))
         menu.addItem(.separator())
 
         for mode in CoolingMode.allCases {
