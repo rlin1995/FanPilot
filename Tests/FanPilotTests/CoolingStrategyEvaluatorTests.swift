@@ -180,6 +180,32 @@ final class CustomStrategyPersistenceTests: XCTestCase {
         XCTAssertTrue(monitor.restoreAutomaticCallCount >= 1)
         XCTAssertTrue(monitor.appliedModes.contains(.medium))
     }
+
+    func testTerminationKeepsControlEnabledForNextLaunch() {
+        let monitor = MockHardwareMonitor()
+        let store = FanPilotStore(monitor: monitor, defaults: defaults)
+        store.enableControl()
+        store.setPreset(.custom)
+        var draft = store.strategy
+        draft.name = "散热优先"
+        draft.rules = [CoolingRule(threshold: 0, mode: .medium)]
+        store.saveStrategy(draft)
+
+        store.prepareForTermination()
+
+        XCTAssertTrue(defaults.bool(forKey: "FanPilot.controlEnabled"))
+        XCTAssertTrue(monitor.restoreAutomaticCallCount >= 1)
+
+        let relaunchedMonitor = MockHardwareMonitor()
+        let relaunchedStore = FanPilotStore(monitor: relaunchedMonitor, defaults: defaults)
+        relaunchedStore.start()
+
+        XCTAssertTrue(relaunchedStore.isControlEnabled)
+        XCTAssertEqual(relaunchedStore.selectedPreset, .custom)
+        XCTAssertEqual(relaunchedStore.strategy.name, "散热优先")
+        XCTAssertTrue(relaunchedMonitor.appliedModes.contains(.medium))
+        relaunchedStore.stop()
+    }
 }
 
 private final class MockHardwareMonitor: HardwareMonitoring {

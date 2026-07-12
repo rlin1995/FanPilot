@@ -139,8 +139,12 @@ final class FanPilotStore: ObservableObject {
 
     func start() {
         detectExistingHelper()
-        refresh()
+        strategy = storedStrategy(for: selectedPreset)
+        refresh(evaluate: !isControlEnabled)
         restartTimer()
+        if isControlEnabled {
+            applySelectedStrategyImmediately()
+        }
     }
 
     func stop() {
@@ -150,7 +154,7 @@ final class FanPilotStore: ObservableObject {
 
     func prepareForTermination() {
         if strategy.restoreAutomaticOnQuit {
-            restoreAutomaticControl()
+            temporarilyRestoreAutomaticForTermination()
         } else {
             save()
         }
@@ -505,6 +509,20 @@ final class FanPilotStore: ObservableObject {
         lastWrite = "已恢复 Apple 自动控制"
         save()
         refresh(evaluate: false)
+    }
+
+    private func temporarilyRestoreAutomaticForTermination() {
+        if !baselineFansForRestore.isEmpty {
+            try? monitor.restoreMinimums(fans: baselineFansForRestore)
+            baselineFansForRestore = []
+        }
+        currentStrategyMode = .automatic
+        manualMode = .automatic
+        try? monitor.restoreAutomatic()
+        isWriteRestricted = false
+        controlPermissionState = isControlEnabled ? .active : (smcAccessState == .available ? .ready : .monitorOnly)
+        lastWrite = "退出应用，已临时交还 Apple 自动控制；下次启动会恢复当前策略"
+        save()
     }
 
     func toggleFavorite(_ sensor: TemperatureSensor) {

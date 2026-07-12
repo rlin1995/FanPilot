@@ -40,6 +40,8 @@ struct Localizer {
         "quit": [.simplifiedChinese: "退出", .traditionalChinese: "結束", .english: "Quit"],
         "language": [.simplifiedChinese: "语言", .traditionalChinese: "語言", .english: "Language"],
         "currentPresetMenu": [.simplifiedChinese: "当前预设", .traditionalChinese: "目前預設", .english: "Preset"],
+        "manualModeMenu": [.simplifiedChinese: "手动模式", .traditionalChinese: "手動模式", .english: "Manual Mode"],
+        "currentStrategyMenu": [.simplifiedChinese: "当前策略", .traditionalChinese: "目前策略", .english: "Current Strategy"],
 
         "automatic": [.simplifiedChinese: "自动", .traditionalChinese: "自動", .english: "Auto"],
         "quiet": [.simplifiedChinese: "静音", .traditionalChinese: "靜音", .english: "Quiet"],

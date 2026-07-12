@@ -70,13 +70,8 @@ final class StatusBarController {
         menu.addItem(headerItem("\(store.text("currentPresetMenu"))    \(store.displayedTitle(for: store.selectedPreset))"))
         menu.addItem(.separator())
 
-        for mode in CoolingMode.allCases {
-            let item = ClosureMenuItem(title: store.title(for: mode)) { [weak self] in
-                self?.store.applyMode(mode)
-            }
-            item.state = store.currentStrategyMode == mode ? .on : .off
-            menu.addItem(item)
-        }
+        menu.addItem(manualModeMenuItem())
+        menu.addItem(strategyMenuItem())
 
         menu.addItem(.separator())
         let languageItem = NSMenuItem(title: store.text("language"), action: nil, keyEquivalent: "")
@@ -103,6 +98,36 @@ final class StatusBarController {
             NSApplication.shared.terminate(nil)
         })
         return menu
+    }
+
+    private func manualModeMenuItem() -> NSMenuItem {
+        let item = NSMenuItem(title: store.text("manualModeMenu"), action: nil, keyEquivalent: "")
+        let submenu = NSMenu()
+        for mode in CoolingMode.allCases {
+            let modeItem = ClosureMenuItem(title: store.title(for: mode)) { [weak self] in
+                self?.store.applyMode(mode)
+            }
+            modeItem.state = store.currentStrategyMode == mode ? .on : .off
+            submenu.addItem(modeItem)
+        }
+        item.submenu = submenu
+        return item
+    }
+
+    private func strategyMenuItem() -> NSMenuItem {
+        let item = NSMenuItem(title: store.text("strategy"), action: nil, keyEquivalent: "")
+        let submenu = NSMenu()
+        submenu.addItem(headerItem("\(store.text("currentStrategyMenu"))    \(store.displayedTitle(for: store.selectedPreset))"))
+        submenu.addItem(.separator())
+        for preset in Preset.allCases {
+            let presetItem = ClosureMenuItem(title: store.displayedTitle(for: preset)) { [weak self] in
+                self?.store.setPreset(preset)
+            }
+            presetItem.state = store.selectedPreset == preset ? .on : .off
+            submenu.addItem(presetItem)
+        }
+        item.submenu = submenu
+        return item
     }
 
     private func headerItem(_ title: String) -> NSMenuItem {
